@@ -22,6 +22,8 @@
 cmake_minimum_required(VERSION 3.16...3.24)
 project(lio_ekf)
 
+add_subdirectory(ThirdParty/kiss_icp)
+
 SET(CMAKE_BUILD_TYPE "Release")
 SET(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 find_package(Eigen3 REQUIRED)
@@ -38,7 +40,7 @@ find_package(
              tf2_ros)
 catkin_package()
 
-include(kiss-icp.cmake)
+#include(kiss-icp.cmake)
 # ROS1 node
 add_executable(lio_ekf_node ${CMAKE_CURRENT_SOURCE_DIR}/src/lio_ekf.cpp 
                             ${CMAKE_CURRENT_SOURCE_DIR}/src/lio_ekf_node.cpp
