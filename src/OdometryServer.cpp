@@ -274,6 +274,8 @@ void OdometryServer::imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
   imu_meas.linear_acceleration =
       lio_para_.imu_tran_R * imu_meas.linear_acceleration;
 
+  //std::cout<<"imu: "<< imu_meas.angular_velocity.transpose()<<" "<< imu_meas.linear_acceleration.transpose() << std::endl;
+
   imu_buffer_.push_back(imu_meas);
 
   last_timestamp_imu_ = timestamp;

@@ -1,15 +1,15 @@
 <?xml version="1.0"?>
 <launch>
 
-  <rosparam command="load" file="$(find lio_ekf)/config/m2dgr.yaml" />
+  <rosparam command="load" file="$(find lio_ekf)/config/ousterUniBonn.yaml" />
 
   <!-- ROS paramaters -->
   <arg name="visualize" default="true"/>
   <arg name="odom_frame" default="odom"/>
-  <arg name="bagfile" default="/home/mathjo/output_rosbag/street_05.bag"/>
+  <arg name="bagfile" default="/home/mathjo/output_rosbag/OusterUniBonn.bag"/>
 
   
-  <param name="outputdir" type="string" value="$(find lio_ekf)/output/m2dgr/street_05/" />
+  <param name="outputdir" type="string" value="$(find lio_ekf)/output/ousterUniBonn/first/" />
 
   <!-- Odometry node -->
   <node pkg="lio_ekf" type="lio_ekf_node" name="lio_ekf_node" output="screen"/>

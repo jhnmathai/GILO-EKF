@@ -1,9 +1,9 @@
 common:
-    lidar_topic:  "velodyne_points" 
-    imu_topic:  "imu/data" 
+    lidar_topic:  "ouster/lidar" 
+    imu_topic:  "ouster/imu" 
 
 lidar:
-    deskew: true
+    deskew: false
     preprocess: true
     max_range: 100.0 
     min_range: 5.0
@@ -27,12 +27,12 @@ lio:
     # initial attitude std, roll, pitch and yaw std. [deg, deg, deg]
     initattstd: [ 0.1, 0.1, 0.1 ]
 
-    extrinsic_T: [0.0, 0.0, 0.28]
+    extrinsic_T: [0.0, 0.0, 0.0]
     extrinsic_R: [ 1, 0, 0, 
                    0, 1, 0, 
                    0, 0, 1]
     #transform the imu frame to front-right-down (which is used in the code)
-    imu_tran_R: [0,1,0,
-                 1,0,0,
+    imu_tran_R: [1,0,0,
+                 0,-1,0,
                  0,0,-1]
     
