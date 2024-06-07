@@ -1,6 +1,6 @@
 common:
-    lidar_topic:  "ouster/lidar" 
-    imu_topic:  "ouster/imu" 
+    lidar_topic:  "lidar" 
+    imu_topic:  "imu" 
 
 lidar:
     deskew: false
