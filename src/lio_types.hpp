@@ -123,6 +123,7 @@ struct LIOPara {
   ImuNoise imunoise;
 
   // extrinsic parameters between lidar and imu Trans_lidar_imu, lidar->imu
+  // ? Why is trans_lidar_imu 4d and not 3d?
   Eigen::Matrix4d Trans_lidar_imu = Eigen::Matrix4d::Identity();
   Eigen::Matrix3d imu_tran_R = Eigen::Matrix3d::Identity();
   // the extrinsic lidar-inertial parameters before transforming the imu frame

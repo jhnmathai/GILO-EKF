@@ -27,6 +27,7 @@ lio:
     # initial attitude std, roll, pitch and yaw std. [deg, deg, deg]
     initattstd: [ 0.1, 0.1, 0.1 ]
 
+    # TODO Check extrinsic matrix between LiDAR and IMU
     extrinsic_T: [0.0, 0.0, 0.0]
     extrinsic_R: [ 1, 0, 0, 
                    0, 1, 0, 

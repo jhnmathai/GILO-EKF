@@ -36,6 +36,8 @@
 #include <tbb/parallel_reduce.h>
 
 namespace {
+// ! Not in use
+// cwiseAbs2() computes the squared absolute value |a|^2
 Eigen::Vector3d SIGMA_POINT =
     Eigen::Vector3d(0.01, 0.05 * lio_ekf::D2R, 0.05 * lio_ekf::D2R);
 Eigen::Matrix3d POINT_NOISE_COV = SIGMA_POINT.cwiseAbs2().asDiagonal();
@@ -84,6 +86,7 @@ void LIOEKF::init() {
   is_first_lidar_ = true;
 }
 
+// TODO: Add initial state from GNSS coordinates. Not more dead reackoning
 void LIOEKF::navStateInitialization(const NavState &initstate,
                                     const NavState &initstate_std) {
 
@@ -104,6 +107,8 @@ void LIOEKF::navStateInitialization(const NavState &initstate,
 }
 
 void LIOEKF::initFirstLiDAR(const int lidarUpdateFlag) {
+  // ? Ask Yibin about function
+  // Sophus SE3d has a rotation and translation matrix
   Sophus::SE3d initLidarpose_w = Sophus::SE3d();
   const auto &lidar_to_imu_extrinsic = Sophus::SE3d(liopara_.Trans_lidar_imu);
   switch (lidarUpdateFlag) {
@@ -119,15 +124,19 @@ void LIOEKF::initFirstLiDAR(const int lidarUpdateFlag) {
     const auto delta_pose = bodystate_pre_.pose.inverse() * bodystate_cur_.pose;
     double relative_lidar_timestamp = (lidar_t_ - imupre_.timestamp) /
                                       (imucur_.timestamp - imupre_.timestamp);
+    // ? How does this work?
+    // T Mat to -> vector
     const auto interpolated_vector_pose =
-        relative_lidar_timestamp * delta_pose.log();
+        relative_lidar_timestamp * delta_pose.log();  
     const Sophus::SE3d interpolated_pose =
+        // exp -> From vector -> T Mat
         bodystate_pre_.pose * Sophus::SE3d::exp(interpolated_vector_pose);
     initLidarpose_w = interpolated_pose * lidar_to_imu_extrinsic;
     break;
   }
   }
 
+  // ? Applies the transformation T to the points?
   lio_map_.Update(curpoints_, initLidarpose_w);
   is_first_lidar_ = false;
   last_update_t_ = lidar_t_;
@@ -136,6 +145,7 @@ void LIOEKF::initFirstLiDAR(const int lidarUpdateFlag) {
 
 void LIOEKF::newImuProcess() {
 
+  // First measurement
   if (is_first_imu_) {
     bodystate_pre_ = bodystate_cur_;
     imupre_ = imucur_;
@@ -144,7 +154,10 @@ void LIOEKF::newImuProcess() {
     return;
   }
 
+
+  // Every other measurement
   // set update time as the lidar time stamp
+  // ? Why?
   double updatetime = lidar_t_;
 
   int lidarUpdateFlag = 0;
@@ -214,7 +227,7 @@ void LIOEKF::newImuProcess() {
   }
 
   // check diagonal elements of current covariance matrix
-  checkStateCov();
+  checkStateCov();  // Nice safety check
 
   // update system state and imudata at the previous epoch
   bodystate_pre_ = bodystate_cur_;
@@ -264,10 +277,11 @@ void LIOEKF::statePropagation(IMU &imupre, IMU &imucur) {
       Eigen::Matrix3d::Identity();
 
   // compute the state transition matrix
-  State_Transition_Mat.setIdentity();
+  State_Transition_Mat.setIdentity();  // ? Twice? Line 249
   State_Transition_Mat = State_Transition_Mat + Jacobian * imucur.dt;
 
-  // compute system propagation noise
+  // ? How is this calculated? What is the logic behind?
+  // compute system propagation noise 
   Process_Noise_Cov = Noise_Driven_Mat * State_Noise_Cov_ *
                       Noise_Driven_Mat.transpose() * imucur.dt;
   Process_Noise_Cov = (State_Transition_Mat * Process_Noise_Cov *
@@ -425,7 +439,7 @@ int LIOEKF::isToUpdate(double imutime1, double imutime2,
     return 3;
   } else {
 
-    // updatetime is not bewteen imutime1 and imutime2, and not near to either.
+    // updatetime is not between imutime1 and imutime2, and not near to either.
     return 0;
   }
 }
@@ -435,6 +449,7 @@ void LIOEKF::ekfPredict(Eigen::Matrix15d &State_Transition_Mat,
 
   assert(State_Transition_Mat.rows() == Cov_.rows());
   assert(Process_Noise_Cov.rows() == Cov_.rows());
+  // ? This lambda function is not use, right?
   auto propagate = [&](const Eigen::Matrix15d &Sigma) {
     return State_Transition_Mat * Sigma * State_Transition_Mat.transpose() +
            Process_Noise_Cov;

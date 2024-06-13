@@ -39,6 +39,7 @@
 // namespace Eigen
 namespace lio_ekf {
 
+// Reminder: Rank(Matrix) -> max number of linearly independent columns.
 #define STATE_RANK 15
 #define STATE_NOISE_RANK 12
 
@@ -47,6 +48,8 @@ using Vector3dVector = std::vector<Eigen::Vector3d>;
 class LIOEKF {
 
 public:
+  // explicit -> disables copy initialization and implicit conversion.
+  // Uses an existing Lio
   explicit LIOEKF(LIOPara &lio_para)
       : liopara_(lio_para), lio_map_(lio_para.voxel_size, lio_para.max_range,
                                      lio_para.max_points_per_voxel) {}
@@ -59,6 +62,15 @@ public:
 
   void init();
 
+  /**
+   * @brief Gets IMU measurement from the deque.
+   *
+   * Updates previous_imu -> current_imu and current_imu -> deque
+   * IMU measurement. At last, pops out the measurement from deque.
+   * 
+   * @param imu_buffer_ Dequeu with IMU measurements.
+   * @param compensate To add or not the bias to IMU measurements.
+   */
   inline void addImuData(std::deque<lio_ekf::IMU> &imu_buffer_,
                          bool compensate = false) {
     const IMU &imu = imu_buffer_.front();
@@ -85,6 +97,7 @@ public:
     curpoints_ = points;
 
     lidar_t_ = timestamp;
+    // Timestamp per point scan, it allows unskewing the data
     if (!points_per_scan_time_buffer_.empty()) {
       timestamps_per_points_ = points_per_scan_time_buffer_.front();
       points_per_scan_time_buffer_.pop_front();
@@ -121,13 +134,14 @@ public:
 
   bool lidar_updated_ = false; // if has done lidar update in the filter system
 
-  inline bool lidarinOutage();
+  inline bool lidarinOutage();  // ! Not in use
 
   Eigen::Matrix4d poseTran(const Eigen::Matrix4d pose1,
                            const Eigen::Matrix4d pose2);
 
   inline void TransformPoints(const Eigen::Matrix4d &T,
                               std::vector<Eigen::Vector3d> &points) {
+    // Lambdas are great <3
     std::transform(points.cbegin(), points.cend(), points.begin(),
                    [&](const auto &point) {
                      const Eigen::Matrix3d R = T.block<3, 3>(0, 0);
@@ -148,7 +162,7 @@ private:
 
   void statePropagation(IMU &imupre, IMU &imucur);
 
-  auto processScan();
+  auto processScan();  // ? Why auto here?
   void lidarUpdate();
 
   void ekfPredict(Eigen::Matrix15d &Phi, Eigen::Matrix15d &Qd);
@@ -157,6 +171,10 @@ private:
 
   void stateFeedback();
 
+  /**
+   * @brief Safety check to avoid negative covariance.
+   * 
+   */
   inline void checkStateCov() {
 
     for (int i = 0; i < STATE_RANK; i++) {
@@ -169,6 +187,7 @@ private:
   }
 
   // void lio_initialization();
+  // ! Not in use
   Eigen::Matrix4d interp_pose(double t1, double t2, Eigen::Matrix4d pose1,
                               Eigen::Matrix4d pose2, double mid_t);
 
@@ -205,7 +224,7 @@ private:
   Eigen::Vector15d delta_x_;
   Eigen::Matrix15d Imu_Prediction_Covariance_ = Eigen::Matrix15d::Zero();
 
-  // state ID and noise ID
+  // state ID and noise I D
   enum StateID {
     POS_ID = 0,
     VEL_ID = 3,
@@ -224,6 +243,7 @@ private:
 
   Vector3dVector curpoints_, curpoints_w_, keypoints_w_;
 
+  // ? How is that?
   std::vector<double>
       timestamps_per_points_; // Timestamps for each points in one frame
 
