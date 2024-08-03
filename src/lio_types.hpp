@@ -128,4 +128,15 @@ struct LIOPara {
   // the extrinsic lidar-inertial parameters before transforming the imu frame
   Eigen::Matrix4d Trans_lidar_imu_origin = Eigen::Matrix4d::Identity();
 };
+
+struct GNSS {
+    double time;
+
+    Eigen::Vector3d blh = Eigen::Vector3d::Zero();
+    Eigen::Vector3d std = Eigen::Vector3d::Zero();
+
+    bool isvalid;
+};
 } // namespace lio_ekf
+
+

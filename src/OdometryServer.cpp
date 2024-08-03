@@ -141,6 +141,11 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
   lio_para_.imunoise.accbias_std *= 1e-5;
   lio_para_.imunoise.correlation_time *= 3600;
 
+
+  lio_para_.initstate.pos << -2853304.23867, 4667242.82476, 3268689.57298;
+  lio_para_.initstate.vel << 0.008546, -5.8e-05, 0.088664;
+  lio_para_.initstate.euler << 0.996025, 0, 0;
+
   lio_para_.initstate_std.imuerror.gyrbias = lio_para_.imunoise.gyrbias_std;
   lio_para_.initstate_std.imuerror.accbias = lio_para_.imunoise.accbias_std;
 
@@ -274,7 +279,9 @@ void OdometryServer::imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
   imu_meas.linear_acceleration =
       lio_para_.imu_tran_R * imu_meas.linear_acceleration;
 
-  //std::cout<<"imu: "<< imu_meas.angular_velocity.transpose()<<" "<< imu_meas.linear_acceleration.transpose() << std::endl;
+  //
+  
+
 
   imu_buffer_.push_back(imu_meas);
 

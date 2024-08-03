@@ -6,7 +6,7 @@
   <!-- ROS paramaters -->
   <arg name="visualize" default="true"/>
   <arg name="odom_frame" default="odom"/>
-  <arg name="bagfile" default="/home/mathjo/output_rosbag/street_05.bag"/>
+  <arg name="bagfile" default="/home/mathjo/data_ouster/m2dgr/street_05.bag"/>
 
   
   <param name="outputdir" type="string" value="$(find lio_ekf)/output/m2dgr/street_05/" />

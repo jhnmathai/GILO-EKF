@@ -56,6 +56,21 @@ void LIOEKF::init() {
 
   // resize covariance matrix, system noise matrix, and system error state
   // matrix
+  /**********
+  Eigen::Vector3d position(-2853304.23867, 4667242.82476, 3268689.57298);
+  Eigen::Quaterniond orientation(0.008546, -5.8e-05, 0.088664, 0.996025);
+  bodystate_cur_.pose.translation() = position;
+  bodystate_cur_.pose.setQuaternion(orientation);
+  std::cout << "Initial pose (SE3): " << std::endl << bodystate_pre_.pose.matrix() << std::endl;
+  std::cout << "Initial velocity (Vector3d): " << bodystate_pre_.vel.transpose() << std::endl;
+  ************/
+  Eigen::Vector3d position(-1, 1, 1);
+  Eigen::Quaterniond orientation(0.008546, -5.8e-05, 0.088664, 0.996025);
+  bodystate_cur_.pose.translation() = position;
+  bodystate_cur_.pose.setQuaternion(orientation);
+  std::cout << "Initial pose (SE3): " << std::endl << bodystate_pre_.pose.matrix() << std::endl;
+  std::cout << "Initial velocity (Vector3d): " << bodystate_pre_.vel.transpose() << std::endl;
+
 
   Cov_.setZero();
   Imu_Prediction_Covariance_.setZero();
@@ -88,6 +103,8 @@ void LIOEKF::navStateInitialization(const NavState &initstate,
                                     const NavState &initstate_std) {
 
   // initialize imu error
+
+  
   imuerror_ = initstate.imuerror;
 
   // initialize covariance
@@ -525,3 +542,46 @@ Eigen::Matrix4d LIOEKF::poseTran(const Eigen::Matrix4d pose1,
 }
 
 } // namespace lio_ekf
+
+
+
+///////////////////////////////////////////////////////////////////////////////////
+/** 
+void GIEngine::gnssUpdate(GNSS &gnssdata) {
+
+    // IMU位置转到GNSS天线相位中心位置
+    // convert IMU position to GNSS antenna phase center position
+    Eigen::Vector3d antenna_pos;
+    Eigen::Matrix3d Dr, Dr_inv;
+    Dr_inv      = Earth::DRi(pvacur_.pos);
+    Dr          = Earth::DR(pvacur_.pos);
+    antenna_pos = pvacur_.pos + Dr_inv * pvacur_.att.cbn * options_.antlever;
+
+    // GNSS位置测量新息
+    // compute GNSS position innovation
+    Eigen::MatrixXd dz;
+    dz = Dr * (antenna_pos - gnssdata.blh);
+
+    // 构造GNSS位置观测矩阵
+    // construct GNSS position measurement matrix
+    Eigen::MatrixXd H_gnsspos;
+    H_gnsspos.resize(3, Cov_.rows());
+    H_gnsspos.setZero();
+    H_gnsspos.block(0, P_ID, 3, 3)   = Eigen::Matrix3d::Identity();
+    H_gnsspos.block(0, PHI_ID, 3, 3) = Rotation::skewSymmetric(pvacur_.att.cbn * options_.antlever);
+
+    // 位置观测噪声阵
+    // construct measurement noise matrix
+    Eigen::MatrixXd R_gnsspos;
+    R_gnsspos = gnssdata.std.cwiseProduct(gnssdata.std).asDiagonal();
+
+    // EKF更新协方差和误差状态
+    // do EKF update to update covariance and error state
+    EKFUpdate(dz, H_gnsspos, R_gnsspos);
+
+    // GNSS更新之后设置为不可用
+    // Set GNSS invalid after update
+    gnssdata.isvalid = false;
+}
+
+*/

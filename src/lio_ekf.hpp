@@ -195,7 +195,7 @@ private:
   // imu state (position, velocity, attitude and imu error)
   BodyState bodystate_cur_;
   BodyState bodystate_pre_;
-
+  
   ImuError imuerror_;
 
   // ekf variables
