@@ -36,6 +36,7 @@
 #include "kiss_icp/core/VoxelHashMap.hpp"
 #include "kiss_icp/pipeline/KissICP.hpp"
 #include "lio_types.hpp"
+#include "earth.hpp"
 // namespace Eigen
 namespace lio_ekf {
 
@@ -180,7 +181,10 @@ private:
 
   void resetCov(Eigen::Matrix15d &Cov);
 
+  void gnssUpdate(GNSS &gnssdata); 
+
 private:
+  GNSS gnss_start_; 
   LIOPara liopara_;
 
   double imu_t_, last_update_t_, lidar_t_, first_lidar_t = 0;

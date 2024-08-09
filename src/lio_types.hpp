@@ -27,6 +27,7 @@
 #include <sophus/se3.hpp>
 #include <vector>
 
+
 namespace Eigen {
 using Matrix15d = Eigen::Matrix<double, 15, 15>;
 using Matrix12d = Eigen::Matrix<double, 12, 12>;
@@ -42,6 +43,8 @@ namespace lio_ekf {
 static constexpr double D2R = (M_PI / 180.0);
 static constexpr double R2D = (180.0 / M_PI);
 static constexpr double NormG = 9.782940329221166;
+
+
 struct BodyState {
   Sophus::SE3d pose = Sophus::SE3d();
   Eigen::Vector3d vel = Eigen::Vector3d::Zero();
@@ -132,11 +135,10 @@ struct LIOPara {
 struct GNSS {
     double time;
 
-    Eigen::Vector3d blh = Eigen::Vector3d::Zero();
-    Eigen::Vector3d std = Eigen::Vector3d::Zero();
+    Eigen::Vector3d blh;
+    Eigen::Vector3d std;
 
     bool isvalid;
 };
 } // namespace lio_ekf
-
 
