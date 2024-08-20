@@ -186,6 +186,9 @@ private:
 private:
   GNSS gnss_start_; 
   LIOPara liopara_;
+  Eigen::Vector3d origin_ecef_;
+  Eigen::Matrix3d Rnw;
+  Eigen::Vector3d origin_;
 
   double imu_t_, last_update_t_, lidar_t_, first_lidar_t = 0;
 

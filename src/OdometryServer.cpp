@@ -141,11 +141,6 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
   lio_para_.imunoise.accbias_std *= 1e-5;
   lio_para_.imunoise.correlation_time *= 3600;
 
-
-  lio_para_.initstate.pos << -2853304.23867, 4667242.82476, 3268689.57298;
-  lio_para_.initstate.vel << 0.008546, -5.8e-05, 0.088664;
-  lio_para_.initstate.euler << 0.996025, 0, 0;
-
   lio_para_.initstate_std.imuerror.gyrbias = lio_para_.imunoise.gyrbias_std;
   lio_para_.initstate_std.imuerror.accbias = lio_para_.imunoise.accbias_std;
 
@@ -160,9 +155,11 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
 
   std::string odomoutputpath = outputdir + "odo.txt";
   std::string odomoutputpath_tum = outputdir + "odo_tum.txt";
+  std::string odomoutputpath_blh = outputdir + "odo_blh.txt";
 
   odomRes_.open(odomoutputpath.c_str());
   odomRes_tum_.open(odomoutputpath_tum.c_str());
+  odomRes_blh_.open(odomoutputpath_blh.c_str());
 
   if (odomRes_.is_open()) {
     ROS_WARN("Odometry output file opened!");
@@ -175,6 +172,9 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
 
   odomRes_tum_ << "# timestamp_s tx ty tz qx qy qz qw" << std::endl;
   odomRes_tum_.setf(std::ios::fixed, std::ios::floatfield);
+
+  odomRes_blh_ << "# timestamp_s b l h qx qy qz qw" << std::endl;
+  odomRes_blh_.setf(std::ios::fixed, std::ios::floatfield);
 
   // Intializee subscribers
   pointcloud_sub_ = nh_.subscribe<sensor_msgs::PointCloud2>(
@@ -330,6 +330,68 @@ void OdometryServer::lidar_cbk(const sensor_msgs::PointCloud2ConstPtr &msg) {
   sig_buffer_.notify_all();
 }
 
+// void OdometryServer::writeResults(std::ofstream &odo) {
+//   lio_ekf::NavState navstate = lio_ekf_.getNavState();
+
+//   Eigen::MatrixXd curCov = lio_ekf_.getCovariance();
+
+//   const auto rotmat_imu = lio_para_.imu_tran_R.inverse();
+
+//   Eigen::Vector3d pos = rotmat_imu * navstate.pos;
+//   // Eigen::Vector3d pos = navstate.pos;
+
+//   // transform pose from the used imu frame (front-right-down) to the original
+//   // imu frame
+//   Eigen::Matrix3d rotmat = lio_para_.imu_tran_R.inverse() *
+//                            Rotation::euler2matrix(navstate.euler) *
+//                            lio_para_.imu_tran_R;
+//   Eigen::Vector3d euler = Rotation::matrix2euler(rotmat);
+
+//   odo << lio_ekf_.getImutimestamp() << " " << pos.transpose() << " "
+//       << navstate.vel.transpose() << " " << euler.transpose() * R2D << " "
+//       << navstate.imuerror.gyrbias.transpose() << " "
+//       << navstate.imuerror.accbias.transpose() << std::endl;
+
+//   Eigen::Quaterniond quat = Rotation::euler2quaternion(euler);
+
+//   odomRes_tum_ << std::setprecision(18) << (lio_ekf_.getImutimestamp() / 1e9)
+//                << "e+09"
+//                << " " << std::setprecision(5) << pos[0] << " " << pos[1] << " "
+//                << pos[2] << " " << quat.x() << " " << quat.y() << " "
+//                << quat.z() << " " << quat.w() << std::endl;
+// }
+
+// void OdometryServer::writeResults(std::ofstream &odo) {
+//   lio_ekf::NavState navstate = lio_ekf_.getNavState();
+
+//   Eigen::MatrixXd curCov = lio_ekf_.getCovariance();
+
+//   const auto rotmat_imu = lio_para_.imu_tran_R.inverse();
+
+//   Eigen::Vector3d pos = rotmat_imu * navstate.pos;
+//   // Eigen::Vector3d pos = navstate.pos;
+//   pos = Earth::ecef2blh(pos);
+//   // transform pose from the used imu frame (front-right-down) to the original
+//   // imu frame
+//   Eigen::Matrix3d rotmat = lio_para_.imu_tran_R.inverse() *
+//                            Rotation::euler2matrix(navstate.euler) *
+//                            lio_para_.imu_tran_R;
+//   Eigen::Vector3d euler = Rotation::matrix2euler(rotmat);
+
+//   odo << lio_ekf_.getImutimestamp() << " " << pos.transpose() << " "
+//       << navstate.vel.transpose() << " " << euler.transpose() * R2D << " "
+//       << navstate.imuerror.gyrbias.transpose() << " "
+//       << navstate.imuerror.accbias.transpose() << std::endl;
+
+//   Eigen::Quaterniond quat = Rotation::euler2quaternion(euler);
+
+//   odomRes_tum_ << std::setprecision(18) << (lio_ekf_.getImutimestamp() / 1e9)
+//                << "e+09"
+//                << " " << std::setprecision(5) << pos[0] << " " << pos[1] << " "
+//                << pos[2] << " " << quat.x() << " " << quat.y() << " "
+//                << quat.z() << " " << quat.w() << std::endl;
+// }
+
 void OdometryServer::writeResults(std::ofstream &odo) {
   lio_ekf::NavState navstate = lio_ekf_.getNavState();
 
@@ -339,6 +401,20 @@ void OdometryServer::writeResults(std::ofstream &odo) {
 
   Eigen::Vector3d pos = rotmat_imu * navstate.pos;
 
+  Eigen::Vector3d posi(-2853304.23867, 4667242.82476, 3268689.57298);
+  Eigen::Vector3d origin_ = Earth::ecef2blh(posi);
+  Eigen::Quaterniond q_enu(0.996134, 0.008177, -5e-06, 0.087466);
+  Eigen::Matrix3d R_enu = q_enu.toRotationMatrix();
+
+  Eigen::Matrix3d R_enu_to_ned;
+  R_enu_to_ned << 0, 1, 0,
+                  1, 0, 0,
+                  0, 0, -1;
+
+  Eigen::Matrix3d R_ned = R_enu_to_ned * R_enu;
+  Eigen::Quaterniond q_ned(R_ned);
+  Eigen::Matrix3d Rnw = q_ned.toRotationMatrix();
+  Eigen::Vector3d blh_val = Earth::local2global(origin_, Rnw * pos);
   // transform pose from the used imu frame (front-right-down) to the original
   // imu frame
   Eigen::Matrix3d rotmat = lio_para_.imu_tran_R.inverse() *
@@ -346,7 +422,7 @@ void OdometryServer::writeResults(std::ofstream &odo) {
                            lio_para_.imu_tran_R;
   Eigen::Vector3d euler = Rotation::matrix2euler(rotmat);
 
-  odo << lio_ekf_.getImutimestamp() << " " << pos.transpose() << " "
+  odo << lio_ekf_.getImutimestamp() << " " << blh_val.transpose() << " "
       << navstate.vel.transpose() << " " << euler.transpose() * R2D << " "
       << navstate.imuerror.gyrbias.transpose() << " "
       << navstate.imuerror.accbias.transpose() << std::endl;

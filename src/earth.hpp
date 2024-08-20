@@ -23,7 +23,6 @@ const double WGS84_E2  = 0.0067394967422764341; /* Second eccentricity squared *
 class Earth {
 
 public:
-    /* 正常重力计算 */
     static double gravity(const Vector3d &blh) {
 
         double sin2 = sin(blh[0]);
@@ -33,7 +32,7 @@ public:
                blh[2] * (0.0000000043977311 * sin2 - 0.0000030876910891) + 0.0000000000007211 * blh[2] * blh[2];
     }
 
-    /* 计算子午圈半径和卯酉圈半径 */
+
     static Eigen::Vector2d meridianPrimeVerticalRadius(double lat) {
         double tmp, sqrttmp;
 
@@ -45,13 +44,12 @@ public:
         return {WGS84_RA * (1 - WGS84_E1) / (sqrttmp * tmp), WGS84_RA / sqrttmp};
     }
 
-    /* 计算卯酉圈半径 */
+
     static double RN(double lat) {
         double sinlat = sin(lat);
         return WGS84_RA / sqrt(1.0 - WGS84_E1 * sinlat * sinlat);
     }
 
-    /* n系(导航坐标系)到e系(地心地固坐标系)转换矩阵 */
     static Matrix3d cne(const Vector3d &blh) {
         double coslon, sinlon, coslat, sinlat;
 
@@ -76,7 +74,7 @@ public:
         return dcm;
     }
 
-    /* n系(导航坐标系)到e系(地心地固坐标系)转换四元数 */
+
     static Quaterniond qne(const Vector3d &blh) {
         Quaterniond quat;
 
@@ -95,12 +93,12 @@ public:
         return quat;
     }
 
-    /* 从n系到e系转换四元数得到纬度和经度 */
+
     static Vector3d blh(const Quaterniond &qne, double height) {
         return {-2 * atan(qne.y() / qne.w()) - M_PI * 0.5, 2 * atan2(qne.z(), qne.w()), height};
     }
 
-    /* 大地坐标(纬度、经度和高程)转地心地固坐标 */
+
     static Vector3d blh2ecef(const Vector3d &blh) {
         double coslat, sinlat, coslon, sinlon;
         double rnh, rn;
@@ -116,14 +114,14 @@ public:
         return {rnh * coslat * coslon, rnh * coslat * sinlon, (rnh - rn * WGS84_E1) * sinlat};
     }
 
-    /* 地心地固坐标转大地坐标 */
+
     static Vector3d ecef2blh(const Vector3d &ecef) {
         double p = sqrt(ecef[0] * ecef[0] + ecef[1] * ecef[1]);
         double rn;
         double lat, lon;
         double h = 0, h2;
 
-        // 初始状态
+   
         lat = atan(ecef[2] / (p * (1.0 - WGS84_E1)));
         lon = 2.0 * atan2(ecef[1], ecef[0] + p);
 
@@ -137,7 +135,7 @@ public:
         return {lat, lon, h};
     }
 
-    /* n系相对位置转大地坐标相对位置 */
+
     static Matrix3d DRi(const Vector3d &blh) {
         Matrix3d dri = Matrix3d::Zero();
 
@@ -149,7 +147,7 @@ public:
         return dri;
     }
 
-    /* 大地坐标相对位置转n系相对位置 */
+    
     static Matrix3d DR(const Vector3d &blh) {
         Matrix3d dr = Matrix3d::Zero();
 
@@ -161,7 +159,7 @@ public:
         return dr;
     }
 
-    /* 局部坐标(在origin处展开)转大地坐标 */
+
     static Vector3d local2global(const Vector3d &origin, const Vector3d &local) {
 
         Vector3d ecef0 = blh2ecef(origin);
@@ -173,7 +171,7 @@ public:
         return blh1;
     }
 
-    /* 大地坐标转局部坐标(在origin处展开) */
+
     static Vector3d global2local(const Vector3d &origin, const Vector3d &global) {
         Vector3d ecef0 = blh2ecef(origin);
         Matrix3d cn0e  = cne(origin);
@@ -183,21 +181,6 @@ public:
         return cn0e.transpose() * (ecef1 - ecef0);
     }
 
-    // static Pose local2global(const Vector3d &origin, const Pose &local) {
-    //     Pose global;
-
-    //     Vector3d ecef0 = blh2ecef(origin);
-    //     Matrix3d cn0e  = cne(origin);
-
-    //     Vector3d ecef1 = ecef0 + cn0e * local.t;
-    //     Vector3d blh1  = ecef2blh(ecef1);
-    //     Matrix3d cn1e  = cne(blh1);
-
-    //     global.t = blh1;
-    //     global.R = cn1e.transpose() * cn0e * local.R;
-
-    //     return global;
-    // }
 
     static Sophus::SE3d global2local(const Vector3d &origin, const Sophus::SE3d &global) {
     // Convert origin and global translation parts to ECEF coordinates
@@ -220,12 +203,12 @@ public:
         return local_pose;
     }
 
-    /* 地球自转角速度投影到e系 */
+    
     static Vector3d iewe() {
         return {0, 0, WGS84_WIE};
     }
 
-    /* 地球自转角速度投影到n系 */
+
     static Vector3d iewn(double lat) {
         return {WGS84_WIE * cos(lat), 0, -WGS84_WIE * sin(lat)};
     }
@@ -236,7 +219,7 @@ public:
         return iewn(global[0]);
     }
 
-    /* n系相对于e系转动角速度投影到n系 */
+
     static Vector3d enwn(const Eigen::Vector2d &rmn, const Vector3d &blh, const Vector3d &vel) {
         return {vel[1] / (rmn[1] + blh[2]), -vel[0] / (rmn[0] + blh[2]), -vel[1] * tan(blh[0]) / (rmn[1] + blh[2])};
     }

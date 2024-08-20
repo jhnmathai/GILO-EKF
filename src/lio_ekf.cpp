@@ -67,21 +67,53 @@ void LIOEKF::init() {
 
   double D2R = (M_PI / 180.0);
   double R2D = (180.0 / M_PI);
-  Eigen::Vector3d origin_ = gnss_start_.blh;
-  // Eigen::Vector3d position(-1, 1, 1);
-  gnss_start_ = GNSS{
-    0.0, 
-    Eigen::Vector3d(30.4447873701*D2R, 114.4718632047*D2R, 20.899), 
-    Eigen::Vector3d::Zero(), 
-    true 
-  };
-  Eigen::Quaterniond orientation(0.008546, -5.8e-05, 0.088664, 0.996025);
-  bodystate_cur_.pose.translation() = Earth::blh2ecef(gnss_start_.blh);
-  bodystate_cur_.pose.setQuaternion(orientation);
-  Eigen::Vector3d local_position = Earth::global2local(origin_, bodystate_cur_.pose).translation();
+  
+  // Eigen::Vector3d posi(-2853304.23867, 4667242.82476, 3268689.57298);
+  // Eigen::Vector3d blh_val = Earth::ecef2blh(posi);
+  // std::cout << "blh_val " << std::endl <<blh_val << std::endl;
+  // gnss_start_ = GNSS{
+  //   0.0,
+  //   blh_val,
+  //   Eigen::Vector3d(0,0,0),
+  //   true
+  // };
+  // origin_ = gnss_start_.blh;
+  
+  // Eigen::Quaterniond orient(0.996134, 0.008177, -5e-06, 0.087466);
+  // // bodystate_cur_.pose.setQuaternion(orient);
+  
+   
+  // Rnw = orient.toRotationMatrix();
 
-  std::cout << "Initial pose (SE3): " << std::endl << bodystate_cur_.pose.matrix() << std::endl;
-  std::cout << "Initial velocity (Vector3d): " << bodystate_cur_.vel.transpose() << std::endl;
+
+  // Eigen::Vector3d position(-2853304.23867, 4667242.82476, 3268689.57298);
+  // Eigen::Quaterniond q_enu(0.996025, 0.008176, 0.10, 0.087474);
+  // Eigen::Matrix3d R_enu = q_enu.toRotationMatrix();
+
+  // Eigen::Matrix3d R_enu_to_ned;
+  // R_enu_to_ned << 0, 1, 0,
+  //                 1, 0, 0,
+  //                 0, 0, -1;
+
+  // Eigen::Matrix3d R_ned = R_enu_to_ned * R_enu;
+  // Eigen::Quaterniond q_ned(R_ned);
+
+  // bodystate_cur_.pose.translation() = position;
+  // bodystate_cur_.pose.setQuaternion(q_ned);
+
+
+
+  // std::cout << "Initial Rnw " << std::endl <<Rnw << std::endl;
+  // std::cout << "Rnw transform" << std::endl <<Rnw * bodystate_cur_.pose.translation() << std::endl;
+  
+  // Eigen::Vector3d position(-1, 1, 1);
+  // Eigen::Quaterniond orientation(0.008546, -5.8e-05, 0.088664, 0.996025);
+  // bodystate_cur_.pose.translation() = Earth::blh2ecef(gnss_start_.blh);
+  // bodystate_cur_.pose.setQuaternion(orientation);
+  // Eigen::Vector3d local_position = Earth::global2local(origin_, bodystate_cur_.pose).translation();
+
+  // std::cout << "Initial pose (SE3): " << std::endl << bodystate_cur_.pose.matrix() << std::endl;
+  // std::cout << "Initial velocity (Vector3d): " << bodystate_cur_.vel.transpose() << std::endl;
 
 
   Cov_.setZero();
@@ -507,6 +539,7 @@ void LIOEKF::stateFeedback() {
       Sophus::SO3d::exp(delta_quat) * bodystate_cur_.pose.so3();
   bodystate_cur_.pose.translation() =
       bodystate_cur_.pose.translation() - delta_translation;
+
   // velocity error feedback
   Eigen::Vector3d delta_vel = delta_x_.block(VEL_ID, 0, 3, 1);
   bodystate_cur_.vel -= delta_vel;
@@ -517,6 +550,24 @@ void LIOEKF::stateFeedback() {
   imuerror_.accbias += delta_bias_acc;
 }
 
+// void LIOEKF::stateFeedback() {
+//   // position error feedback
+//   Eigen::Vector3d delta_translation = delta_x_.block(POS_ID, 0, 3, 1);
+//   Eigen::Vector3d delta_quat = delta_x_.block(ATT_ID, 0, 3, 1);
+//   bodystate_cur_.pose.so3() =
+//       Sophus::SO3d::exp(delta_quat) * bodystate_cur_.pose.so3();
+//   bodystate_cur_.pose.translation() =
+//       bodystate_cur_.pose.translation() - delta_translation;
+//   // velocity error feedback
+//   Eigen::Vector3d delta_vel = delta_x_.block(VEL_ID, 0, 3, 1);
+//   bodystate_cur_.vel -= delta_vel;
+//   // IMU bias error feedback
+//   Eigen::Vector3d delta_bias_gyro = delta_x_.block(GYRO_BIAS_ID, 0, 3, 1);
+//   imuerror_.gyrbias += delta_bias_gyro;
+//   Eigen::Vector3d delta_bias_acc = delta_x_.block(ACC_BIAS_ID, 0, 3, 1);
+//   imuerror_.accbias += delta_bias_acc;
+// }
+
 NavState LIOEKF::getNavState() {
   NavState state;
   state.pos = bodystate_cur_.pose.translation();
@@ -525,6 +576,17 @@ NavState LIOEKF::getNavState() {
   state.imuerror = imuerror_;
   return state;
 }
+
+// NavState LIOEKF::getNavState() {
+//   NavState state;
+//   bodystate_cur_.blh = Earth::local2global(origin_, Rnw * bodystate_cur_.pose.translation());
+//   std::cout << " Rnw * bodystate_cur_.pose.translation() " << std::endl << Rnw * bodystate_cur_.pose.translation()<< std::endl;
+//   state.pos = bodystate_cur_.blh;
+//   state.vel = bodystate_cur_.vel;
+//   state.euler = Rotation::matrix2euler(bodystate_cur_.pose.rotationMatrix());
+//   state.imuerror = imuerror_;
+//   return state;
+// }
 
 std::pair<Vector3dVector, Vector3dVector>
 LIOEKF::Voxelize(const std::vector<Eigen::Vector3d> &frame) const {
@@ -565,6 +627,7 @@ void LIOEKF::gnssUpdate(GNSS &gnssdata) {
     
     Dr_inv      = Earth::DRi(bodystate_cur_.pose.translation());
     Dr          = Earth::DR(bodystate_cur_.pose.translation());
+
     // antenna_pos = bodystate_cur_.pose + Dr_inv * bodystate_cur_.pose.rotationMatrix() * options_.antlever;
     
 

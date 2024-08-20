@@ -62,7 +62,7 @@ private:
 
   // output dir
   std::string outputdir;
-  std::ofstream odomRes_, odomRes_tum_;
+  std::ofstream odomRes_, odomRes_tum_,  odomRes_blh_;
 
   /// Ros node stuff
   ros::NodeHandle nh_;

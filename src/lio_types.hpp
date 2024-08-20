@@ -45,7 +45,13 @@ static constexpr double R2D = (180.0 / M_PI);
 static constexpr double NormG = 9.782940329221166;
 
 
+// struct BodyState {
+//   Sophus::SE3d pose = Sophus::SE3d();
+//   Eigen::Vector3d vel = Eigen::Vector3d::Zero();
+// };
+
 struct BodyState {
+  Eigen::Vector3d blh = Eigen::Vector3d::Zero();
   Sophus::SE3d pose = Sophus::SE3d();
   Eigen::Vector3d vel = Eigen::Vector3d::Zero();
 };
