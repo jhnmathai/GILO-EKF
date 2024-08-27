@@ -182,26 +182,26 @@ public:
     }
 
 
-    static Sophus::SE3d global2local(const Vector3d &origin, const Sophus::SE3d &global) {
-    // Convert origin and global translation parts to ECEF coordinates
-        Vector3d ecef0 = blh2ecef(origin);
-        Vector3d ecef1 = blh2ecef(global.translation());
+    // static Sophus::SE3d global2local(const Vector3d &origin, const Sophus::SE3d &global) {
+    // // Convert origin and global translation parts to ECEF coordinates
+    //     Vector3d ecef0 = blh2ecef(origin);
+    //     Vector3d ecef1 = blh2ecef(global.translation());
 
-        // Compute rotation matrices
-        Matrix3d cn0e = cne(origin);
-        Matrix3d cn1e = cne(global.translation());
+    //     // Compute rotation matrices
+    //     Matrix3d cn0e = cne(origin);
+    //     Matrix3d cn1e = cne(global.translation());
 
-        // Compute local translation in the NED frame
-        Vector3d local_translation = cn0e.transpose() * (ecef1 - ecef0);
+    //     // Compute local translation in the NED frame
+    //     Vector3d local_translation = cn0e.transpose() * (ecef1 - ecef0);
 
-        // Compute local rotation in the NED frame
-        Matrix3d local_rotation = cn0e.transpose() * cn1e * global.rotationMatrix();
+    //     // Compute local rotation in the NED frame
+    //     Matrix3d local_rotation = cn0e.transpose() * cn1e * global.rotationMatrix();
 
-        // Construct the local Sophus::SE3d pose
-        Sophus::SE3d local_pose(local_rotation, local_translation);
+    //     // Construct the local Sophus::SE3d pose
+    //     Sophus::SE3d local_pose(local_rotation, local_translation);
 
-        return local_pose;
-    }
+    //     return local_pose;
+    // }
 
     
     static Vector3d iewe() {

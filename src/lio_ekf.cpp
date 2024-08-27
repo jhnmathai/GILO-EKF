@@ -53,7 +53,7 @@ void LIOEKF::init() {
 
   imu_t_ = 0.0;
   lidar_t_ = 0.0;
-
+  gnss_t_ = 0.0;
   // resize covariance matrix, system noise matrix, and system error state
   // matrix
   /**********
@@ -87,7 +87,7 @@ void LIOEKF::init() {
 
 
   // Eigen::Vector3d position(-2853304.23867, 4667242.82476, 3268689.57298);
-  // Eigen::Quaterniond q_enu(0.996025, 0.008176, 0.10, 0.087474);
+  // Eigen::Quaterniond q_enu(0.996134, 0.008177, -5e-06, 0.087466);
   // Eigen::Matrix3d R_enu = q_enu.toRotationMatrix();
 
   // Eigen::Matrix3d R_enu_to_ned;
@@ -99,10 +99,25 @@ void LIOEKF::init() {
   // Eigen::Quaterniond q_ned(R_ned);
 
   // bodystate_cur_.pose.translation() = position;
-  // bodystate_cur_.pose.setQuaternion(q_ned);
+  // bodystate_cur_.pose.setQuaternion(q_enu);
 
 
-
+  Eigen::Quaterniond q_enu_1(0.996134, 0.008177 , -5e-06, 0.087466);
+  Eigen::Matrix3d r_Mat = q_enu_1.toRotationMatrix();
+  Eigen::Vector3d euler = r_Mat.eulerAngles(2, 1, 0); 
+  euler = euler * (180.0 / M_PI);
+  std::cout << "Quat 0.996134, 0.008177 , -5e-06, 0.087466" <<"\n";
+  std::cout << "Yaw (Z): " << euler[0] << "\n";
+  std::cout << "Pitch (Y): " << euler[1] << "\n";
+  std::cout << "Roll (X): " << euler[2] << "\n";
+  Eigen::Quaterniond q_enu_2(0.996026, 0.008551, -7e-05, 0.08865);
+  Eigen::Matrix3d rotationMatrix = q_enu_2.toRotationMatrix();
+  Eigen::Vector3d eul = rotationMatrix.eulerAngles(2, 1, 0); 
+  eul = eul * (180.0 / M_PI);
+  std::cout << "Quat 0.996026, 0.008551, -7e-05, 0.08865" <<"\n";
+  std::cout << "Yaw (Z): " << eul[0] << "\n";
+  std::cout << "Pitch (Y): " << eul[1] << "\n";
+  std::cout << "Roll (X): " << eul[2] << "\n";
   // std::cout << "Initial Rnw " << std::endl <<Rnw << std::endl;
   // std::cout << "Rnw transform" << std::endl <<Rnw * bodystate_cur_.pose.translation() << std::endl;
   
@@ -617,51 +632,48 @@ Eigen::Matrix4d LIOEKF::poseTran(const Eigen::Matrix4d pose1,
 
 
 
-void LIOEKF::gnssUpdate(GNSS &gnssdata) {
+// void LIOEKF::gnssUpdate(GNSS &gnssdata) {
 
 
-    // convert IMU position to GNSS antenna phase center position
+//     // convert IMU position to GNSS antenna phase center position
    
-    Eigen::Vector3d antenna_pos;
-    Eigen::Matrix3d Dr, Dr_inv;
+//     Eigen::Vector3d antenna_pos;
+//     Eigen::Matrix3d Dr, Dr_inv;
     
-    Dr_inv      = Earth::DRi(bodystate_cur_.pose.translation());
-    Dr          = Earth::DR(bodystate_cur_.pose.translation());
+//     Dr_inv      = Earth::DRi(bodystate_cur_.pose.translation());
+//     Dr          = Earth::DR(bodystate_cur_.pose.translation());
 
-    // antenna_pos = bodystate_cur_.pose + Dr_inv * bodystate_cur_.pose.rotationMatrix() * options_.antlever;
+//     // antenna_pos = bodystate_cur_.pose + Dr_inv * bodystate_cur_.pose.rotationMatrix() * options_.antlever;
     
 
-    // compute GNSS position innovation
-    /*
-    Eigen::MatrixXd dz;
-    dz = Dr * (antenna_pos - gnssdata.blh);
-    */
+//     // compute GNSS position innovation
+    
+//     // GNSS位置测量新息
+//     // compute GNSS position innovation
+//     Eigen::MatrixXd dz;
+//     dz = Dr * (antenna_pos - gnssdata.blh);
 
-    // construct GNSS position measurement matrix
-    /*
-    Eigen::MatrixXd H_gnsspos;
-    H_gnsspos.resize(3, Cov_.rows());
-    H_gnsspos.setZero();
-    H_gnsspos.block(0, P_ID, 3, 3)   = Eigen::Matrix3d::Identity();
-    H_gnsspos.block(0, PHI_ID, 3, 3) = Rotation::skewSymmetric(pvacur_.att.cbn * options_.antlever);
-    */
+//     // 构造GNSS位置观测矩阵
+//     // construct GNSS position measurement matrix
+//     Eigen::MatrixXd H_gnsspos;
+//     H_gnsspos.resize(3, Cov_.rows());
+//     H_gnsspos.setZero();
+//     H_gnsspos.block(0, P_ID, 3, 3)   = Eigen::Matrix3d::Identity();
+//     H_gnsspos.block(0, PHI_ID, 3, 3) = Rotation::skewSymmetric(pvacur_.att.cbn * options_.antlever);
 
-    // construct measurement noise matrix
-    /*
-    Eigen::MatrixXd R_gnsspos;
-    R_gnsspos = gnssdata.std.cwiseProduct(gnssdata.std).asDiagonal();
-    */
+//     // 位置观测噪声阵
+//     // construct measurement noise matrix
+//     Eigen::MatrixXd R_gnsspos;
+//     R_gnsspos = gnssdata.std.cwiseProduct(gnssdata.std).asDiagonal();
 
+//     // EKF更新协方差和误差状态
+//     // do EKF update to update covariance and error state
+//     EKFUpdate(dz, H_gnsspos, R_gnsspos);
 
-    // do EKF update to update covariance and error state
-    /*
-    EKFUpdate(dz, H_gnsspos, R_gnsspos);
-    */
-
- 
-    // Set GNSS invalid after update
-    gnssdata.isvalid = false;
-}
+//     // GNSS更新之后设置为不可用
+//     // Set GNSS invalid after update
+//     gnssdata.isvalid = false;
+// }
 
 
 } // namespace lio_ekf

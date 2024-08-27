@@ -40,6 +40,7 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/NavSatFix.h>
 #include <tf/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 
@@ -69,6 +70,7 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
   // common
   nh_.param<std::string>("common/lidar_topic", lid_topic, "");
   nh_.param<std::string>("common/imu_topic", imu_topic, "");
+  nh_.param<std::string>("common/gnss_topic", gnss_topic, "");
 
   nh_.getParam("outputdir", outputdir);
 
@@ -181,6 +183,8 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
       lid_topic, 1000, &OdometryServer::lidar_cbk, this);
   imu_sub_ = nh_.subscribe<sensor_msgs::Imu>(imu_topic, 10000,
                                              &OdometryServer::imu_cbk, this);
+  gnss_sub_ = nh_.subscribe<sensor_msgs::NavSatFix>(
+    gnss_topic, 1000, &OdometryServer::gnss_cbk, this);
 
   // Intialize publishers
   odom_publisher_ = nh_.advertise<nav_msgs::Odometry>("odometry", queue_size_);
@@ -330,6 +334,43 @@ void OdometryServer::lidar_cbk(const sensor_msgs::PointCloud2ConstPtr &msg) {
   sig_buffer_.notify_all();
 }
 
+void OdometryServer::gnss_cbk(const sensor_msgs::NavSatFix::ConstPtr &msg_in) {
+    // Lock buffer to ensure thread safety
+    mtx_buffer_.lock();
+
+    // Create a new GNSS message object
+    sensor_msgs::NavSatFix::Ptr msg(new sensor_msgs::NavSatFix(*msg_in));
+
+    // Create a GNSS measurement structure
+    lio_ekf::GNSS gnss_meas;
+
+    // Set the timestamp
+    gnss_meas.time = msg->header.stamp.toSec();
+
+    // Populate latitude, longitude, and altitude into the blh vector
+    gnss_meas.blh << msg->latitude, msg->longitude, msg->altitude;
+
+    // Populate standard deviations, if available (assuming `position_covariance` from NavSatFix is structured like this)
+    // Covariance matrix from NavSatFix is 3x3, stored as a flat array. Diagonal elements represent variances.
+    gnss_meas.std << std::sqrt(msg->position_covariance[0]),  // Standard deviation of latitude
+                    std::sqrt(msg->position_covariance[4]),  // Standard deviation of longitude
+                    std::sqrt(msg->position_covariance[8]);  // Standard deviation of altitude
+
+    // Check the status of the GNSS data (validity) based on NavSatFix's status
+    gnss_meas.isvalid = (msg->status.status >= sensor_msgs::NavSatStatus::STATUS_FIX);
+
+    // Add the GNSS measurement to the GNSS buffer
+    gnss_buffer_.push_back(gnss_meas);
+
+    // Update the last GNSS timestamp
+    last_timestamp_gnss_ = gnss_meas.time;
+
+    // Unlock the buffer and notify other threads waiting for new data
+    mtx_buffer_.unlock();
+    sig_buffer_.notify_all();
+}
+
+
 // void OdometryServer::writeResults(std::ofstream &odo) {
 //   lio_ekf::NavState navstate = lio_ekf_.getNavState();
 
@@ -368,9 +409,15 @@ void OdometryServer::lidar_cbk(const sensor_msgs::PointCloud2ConstPtr &msg) {
 
 //   const auto rotmat_imu = lio_para_.imu_tran_R.inverse();
 
-//   Eigen::Vector3d pos = rotmat_imu * navstate.pos;
-//   // Eigen::Vector3d pos = navstate.pos;
+  // Eigen::Vector3d pos = rotmat_imu * navstate.pos;
+//   Eigen::Vector3d pos = navstate.pos;
+//   Eigen::Vector3d origin_ecef(-2853304.23867, 4667242.82476, 3268689.57298);
+//   Eigen::Vector3d origin_ = Earth::ecef2blh(origin_ecef);
 //   pos = Earth::ecef2blh(pos);
+//   Eigen::Vector3d local_pos = Earth::global2local(origin_, pos);
+//   Eigen::Vector3d local_ned = rotmat_imu * local_pos;
+//   pos = Earth::local2global(origin_, local_ned);
+  
 //   // transform pose from the used imu frame (front-right-down) to the original
 //   // imu frame
 //   Eigen::Matrix3d rotmat = lio_para_.imu_tran_R.inverse() *
@@ -403,7 +450,8 @@ void OdometryServer::writeResults(std::ofstream &odo) {
 
   Eigen::Vector3d posi(-2853304.23867, 4667242.82476, 3268689.57298);
   Eigen::Vector3d origin_ = Earth::ecef2blh(posi);
-  Eigen::Quaterniond q_enu(0.996134, 0.008177, -5e-06, 0.087466);
+  Eigen::Quaterniond q_enu(0.996026, 0.008551, -7e-05, 0.08865);
+  
   Eigen::Matrix3d R_enu = q_enu.toRotationMatrix();
 
   Eigen::Matrix3d R_enu_to_ned;

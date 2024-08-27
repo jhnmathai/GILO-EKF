@@ -104,6 +104,8 @@ public:
 
   inline double getLiDARtimestamp() const { return lidar_t_; }
 
+  inline double getGnsstimestamp() const { return gnss_t_; }
+
   NavState getNavState();
 
   inline Eigen::MatrixXd getCovariance() { return Cov_; }
@@ -190,7 +192,7 @@ private:
   Eigen::Matrix3d Rnw;
   Eigen::Vector3d origin_;
 
-  double imu_t_, last_update_t_, lidar_t_, first_lidar_t = 0;
+  double imu_t_, last_update_t_, lidar_t_, first_lidar_t = 0, gnss_t_;
 
   // time align error threshold
   double TIME_ALIGN_ERR = 0.001;

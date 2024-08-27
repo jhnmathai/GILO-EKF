@@ -1,7 +1,7 @@
 common:
     lidar_topic:  "velodyne_points"
     imu_topic:  "handsfree/imu" 
-
+    gnss_topic: "ublox/fix"
 lidar:
     deskew: true
     preprocess: true
