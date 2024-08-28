@@ -98,6 +98,16 @@ public:
     lidar_time_buffer_.pop_front();
   }
 
+  
+  inline void addGnssData(std::deque<lio_ekf::GNSS> &gnss_buffer_) {
+    const lio_ekf::GNSS &gnss_meas = gnss_buffer_.front();
+    
+    gnsscur_ = gnss_meas;
+    gnss_t_ = gnsscur_.timestamp;
+
+    gnss_buffer_.pop_front();
+  }
+
   void newImuProcess();
 
   inline double getImutimestamp() const { return imu_t_; }
@@ -207,6 +217,7 @@ private:
   
   ImuError imuerror_;
 
+  GNSS gnsscur_;
   // ekf variables
 
   Eigen::Matrix15d Cov_;

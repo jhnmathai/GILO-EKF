@@ -206,60 +206,59 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
 
   ros::Rate rate(1000);
   bool status = ros::ok();
+  int ind=0;
   while (status) {
+      ros::spinOnce();
 
-    ros::spinOnce();
-    if (!data_synced_) {
-      if (!imu_buffer_.empty() && !lidar_buffer_.empty()) {
-        if (!imu_buffer_.empty()) {
+      if (!data_synced_) {
+          // Initial synchronization between IMU and LiDAR
+          if (!imu_buffer_.empty() && !lidar_buffer_.empty()) {
+              if (!imu_buffer_.empty()) {
+                  lio_ekf_.addImuData(imu_buffer_, false);
+              }
+              if (!lidar_buffer_.empty()) {
+                  if (lio_ekf_.getLiDARtimestamp() < lio_ekf_.getImutimestamp()) {
+                      lio_ekf_.addLidarData(lidar_buffer_, lidar_time_buffer_,
+                                            lidar_header_buffer_,
+                                            points_per_scan_time_buffer_);
+                  }
+              }
 
-          lio_ekf_.addImuData(imu_buffer_, false);
-        }
-        if (!lidar_buffer_.empty()) {
-
-          if (lio_ekf_.getLiDARtimestamp() < lio_ekf_.getImutimestamp()) {
-
-            lio_ekf_.addLidarData(lidar_buffer_, lidar_time_buffer_,
-                                  lidar_header_buffer_,
-                                  points_per_scan_time_buffer_);
+              if (lio_ekf_.getLiDARtimestamp() >= lio_ekf_.getImutimestamp()) {
+                  data_synced_ = true;
+              }
           }
-        }
+      } else {
+          // Process LiDAR data if it's available
+          if (!lidar_buffer_.empty() && lio_ekf_.getLiDARtimestamp() < lio_ekf_.getImutimestamp()) {
+              lio_ekf_.addLidarData(lidar_buffer_, lidar_time_buffer_,
+                                    lidar_header_buffer_, points_per_scan_time_buffer_);
+          }
+          // Process IMU data if LiDAR is also available
+          else if (!imu_buffer_.empty() && !lidar_buffer_.empty()) {
+              lio_ekf_.addImuData(imu_buffer_, false);
+              lio_ekf_.newImuProcess();
 
-        if (lio_ekf_.getLiDARtimestamp() >= lio_ekf_.getImutimestamp()) {
-          data_synced_ = true;
-        }
+              if (lio_ekf_.lidar_updated_) {
+                  writeResults(odomRes_);
+                  publishMsgs();
+                  lio_ekf_.lidar_updated_ = false;
+              }
+          }
+          // Process GNSS data if it's available and synchronized
+          else if (!gnss_buffer_.empty() && lio_ekf_.getGnsstimestamp() < lio_ekf_.getImutimestamp()) {
+              lio_ekf_.addGnssData(gnss_buffer_);
+              ind =ind +1;
+              std::cout<<"Val of i is"<<ind<<std::endl;
+          }
       }
-    } else {
 
-      if (lidar_buffer_.empty())
-        if (imu_buffer_.empty()) {
-          continue;
-        }
-
-      if (lio_ekf_.getLiDARtimestamp() < lio_ekf_.getImutimestamp() &&
-          !lidar_buffer_.empty()) {
-
-        lio_ekf_.addLidarData(lidar_buffer_, lidar_time_buffer_,
-                              lidar_header_buffer_,
-                              points_per_scan_time_buffer_);
-      }
-
-      if (!imu_buffer_.empty() &&
-          !lidar_buffer_.empty()) // make sure lidar data is already there!
-      {
-        lio_ekf_.addImuData(imu_buffer_, false);
-        lio_ekf_.newImuProcess();
-        if (lio_ekf_.lidar_updated_) {
-          writeResults(odomRes_);
-          publishMsgs();
-          lio_ekf_.lidar_updated_ = false;
-        }
-      }
-    }
-
-    status = ros::ok();
-    rate.sleep();
+      status = ros::ok();
+      rate.sleep();
   }
+
+
+
 }
 
 void OdometryServer::imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
@@ -335,40 +334,27 @@ void OdometryServer::lidar_cbk(const sensor_msgs::PointCloud2ConstPtr &msg) {
 }
 
 void OdometryServer::gnss_cbk(const sensor_msgs::NavSatFix::ConstPtr &msg_in) {
-    // Lock buffer to ensure thread safety
+    sensor_msgs::NavSatFix::Ptr msg(new sensor_msgs::NavSatFix(*msg_in));
+    double timestamp = msg->header.stamp.toSec();
+
     mtx_buffer_.lock();
 
-    // Create a new GNSS message object
-    sensor_msgs::NavSatFix::Ptr msg(new sensor_msgs::NavSatFix(*msg_in));
-
-    // Create a GNSS measurement structure
     lio_ekf::GNSS gnss_meas;
+    gnss_meas.timestamp = timestamp;
 
-    // Set the timestamp
-    gnss_meas.time = msg->header.stamp.toSec();
-
-    // Populate latitude, longitude, and altitude into the blh vector
     gnss_meas.blh << msg->latitude, msg->longitude, msg->altitude;
 
-    // Populate standard deviations, if available (assuming `position_covariance` from NavSatFix is structured like this)
-    // Covariance matrix from NavSatFix is 3x3, stored as a flat array. Diagonal elements represent variances.
-    gnss_meas.std << std::sqrt(msg->position_covariance[0]),  // Standard deviation of latitude
-                    std::sqrt(msg->position_covariance[4]),  // Standard deviation of longitude
-                    std::sqrt(msg->position_covariance[8]);  // Standard deviation of altitude
-
-    // Check the status of the GNSS data (validity) based on NavSatFix's status
+    // Assuming you have a status flag to check GNSS validity
     gnss_meas.isvalid = (msg->status.status >= sensor_msgs::NavSatStatus::STATUS_FIX);
 
-    // Add the GNSS measurement to the GNSS buffer
     gnss_buffer_.push_back(gnss_meas);
 
-    // Update the last GNSS timestamp
-    last_timestamp_gnss_ = gnss_meas.time;
+    last_timestamp_gnss_ = timestamp;
 
-    // Unlock the buffer and notify other threads waiting for new data
     mtx_buffer_.unlock();
     sig_buffer_.notify_all();
 }
+
 
 
 // void OdometryServer::writeResults(std::ofstream &odo) {

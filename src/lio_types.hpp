@@ -139,7 +139,7 @@ struct LIOPara {
 };
 
 struct GNSS {
-    double time;
+    double timestamp;
 
     Eigen::Vector3d blh;
     Eigen::Vector3d std;
