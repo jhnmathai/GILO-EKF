@@ -51,7 +51,7 @@ static constexpr double NormG = 9.782940329221166;
 // };
 
 struct BodyState {
-  Eigen::Vector3d blh = Eigen::Vector3d::Zero();
+  // Eigen::Vector3d blh = Eigen::Vector3d::Zero();
   Sophus::SE3d pose = Sophus::SE3d();
   Eigen::Vector3d vel = Eigen::Vector3d::Zero();
 };
@@ -87,13 +87,13 @@ struct ImuNoise {
 };
 
 struct IMU {
-  double timestamp;
-  double dt; // time interval between two imu eppoch
+  double time;
+    double dt;
 
-  Eigen::Vector3d angular_velocity = Eigen::Vector3d::Zero();
-  ;
-  Eigen::Vector3d linear_acceleration = Eigen::Vector3d::Zero();
-  ;
+    Eigen::Vector3d dtheta;
+    Eigen::Vector3d dvel;
+
+    double odovel;
 };
 
 struct ResultTuple {

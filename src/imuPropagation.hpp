@@ -22,6 +22,7 @@
 #pragma once
 
 #include "lio_types.hpp"
+#include "earth.hpp"
 
 namespace lio_ekf {
 
@@ -32,5 +33,7 @@ void imuInterpolate(const IMU &imu1, IMU &imu2, const double timestamp,
 
 void insMechanization(const BodyState &pvapre, BodyState &pvacur,
                       const IMU &imupre, const IMU &imucur);
-
+void posUpdate(const BodyState &pvapre, BodyState &pvacur, const IMU &imupre, const IMU &imucur);
+void velUpdate(const BodyState &pvapre, BodyState &pvacur, const IMU &imupre, const IMU &imucur);
+void attUpdate(const BodyState &pvapre, BodyState &pvacur, const IMU &imupre, const IMU &imucur);
 } // namespace lio_ekf

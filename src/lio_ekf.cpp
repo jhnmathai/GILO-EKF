@@ -197,8 +197,8 @@ void LIOEKF::initFirstLiDAR(const int lidarUpdateFlag) {
   }
   case 3: {
     const auto delta_pose = bodystate_pre_.pose.inverse() * bodystate_cur_.pose;
-    double relative_lidar_timestamp = (lidar_t_ - imupre_.timestamp) /
-                                      (imucur_.timestamp - imupre_.timestamp);
+    double relative_lidar_timestamp = (lidar_t_ - imupre_.time) /
+                                      (imucur_.time - imupre_.time);
     const auto interpolated_vector_pose =
         relative_lidar_timestamp * delta_pose.log();
     const Sophus::SE3d interpolated_pose =
@@ -220,7 +220,7 @@ void LIOEKF::newImuProcess() {
   if (is_first_imu_) {
     bodystate_pre_ = bodystate_cur_;
     imupre_ = imucur_;
-    imu_t_ = imucur_.timestamp;
+    imu_t_ = imucur_.time;
     is_first_imu_ = false;
     return;
   }
@@ -234,7 +234,7 @@ void LIOEKF::newImuProcess() {
   if(enter_if_flag) { 
     if (lidar_t_ > last_update_t_ + 0.001 || is_first_lidar_)
       lidarUpdateFlag =
-          isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetimeLidar);
+          isToUpdate(imupre_.time, imucur_.time, updatetimeLidar);
     // determine if we should do  update
 
     switch (lidarUpdateFlag) {
@@ -310,7 +310,7 @@ void LIOEKF::newImuProcess() {
       int GnssUpdateFlag = 0;
       bool gnss_updated_ = false;
 
-      GnssUpdateFlag = isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetimeGnss);
+      GnssUpdateFlag = isToUpdate(imupre_.time, imucur_.time, updatetimeGnss);
     
       // std::cout<<"updatetimeGnss "<<std::fixed << std::setprecision(10)<<updatetimeGnss<<"\n"<<std::endl;
 
@@ -404,7 +404,7 @@ void LIOEKF::statePropagation(IMU &imupre, IMU &imucur) {
 
   // velocity error
   Jacobian.block(VEL_ID, ATT_ID, 3, 3) = Rotation::skewSymmetric(
-      bodystate_pre_.pose.rotationMatrix() * imucur.linear_acceleration);
+      bodystate_pre_.pose.rotationMatrix() * imucur.dvel);
   Jacobian.block(VEL_ID, ACC_BIAS_ID, 3, 3) =
       bodystate_pre_.pose.rotationMatrix();
 
@@ -717,28 +717,62 @@ Eigen::Matrix4d LIOEKF::poseTran(const Eigen::Matrix4d pose1,
 
   void LIOEKF::gnssUpdate(const GNSS &gnss_meas) {
 
-      Eigen::Vector3d gnss_pos_local = Earth::blhToEnu(gnss_init_val, gnss_meas.blh);
-      // Eigen::Vector3d gnss_pos_local = Earth::blh2ecef(gnss_meas.blh);
-      Eigen::Vector3d predicted_position = bodystate_cur_.pose.translation();
-      Eigen::MatrixXd dz = (gnss_pos_local - predicted_position).cast<double>();  
-      Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 15);  
-      H.block<3, 3>(0, POS_ID) = Eigen::Matrix3d::Identity();  
-      Eigen::MatrixXd R = gnss_meas.covariance.cast<double>();
+    Eigen::Vector3d antenna_pos;
+    Eigen::Matrix3d Dr, Dr_inv;
+    Dr_inv      = Earth::DRi(pvacur_.pos);
+    Dr          = Earth::DR(pvacur_.pos);
+    // antenna_pos = pvacur_.pose.translation() + Dr_inv * pvacur_.pose.rotationMatrix() * options_.antlever;
 
-      // std::cout<<"gnss_init_val "<<gnss_init_val<<"\n"<<std::endl;
-      // std::cout<<"gnss_init_timestamp "<<std::fixed << std::setprecision(10) <<gnss_init_timestamp<<"\n"<<std::endl;
-      std::cout<<"gnss_pos_local "<<gnss_pos_local<<"\n"<<std::endl;
-      std::cout<<"predicted_position "<<predicted_position<<"\n"<<std::endl;
-      std::cout<<"dz "<<dz<<"\n"<<std::endl;
-      // std::cout<<"gnss_val "<<gnss_meas.blh<<"\n"<<std::endl;
+    antenna_pos = pvacur_.pose.translation()
+    // compute GNSS position innovation
+    Eigen::MatrixXd dz;
+    dz = Dr * (antenna_pos - gnssdata.blh);
 
-      std::cout << "Entered the GnssUpdate" << "\n" << std::endl;
+    
+    // construct GNSS position measurement matrix
+    
+    Eigen::MatrixXd H_gnsspos = Eigen::MatrixXd::Zero(3, 15);  
+    H_gnsspos.block<3, 3>(0, POS_ID) = Eigen::Matrix3d::Identity();  
+    // H_gnsspos.block(0, PHI_ID, 3, 3) = Rotation::skewSymmetric(pvacur_.pose.rotationMatrix() * options_.antlever);
 
-      ekfUpdate(dz, H, R);
+    
+    // construct measurement noise matrix
+    Eigen::MatrixXd R_gnsspos;
+    // R_gnsspos = gnssdata.std.cwiseProduct(gnssdata.std).asDiagonal();
+    R_gnsspos = gnss_meas.covariance.cast<double>();
+   
+    std::cout<<"Calculated pose"<<antenna_pos<<"\n"<<std::endl;
+    std::cout<<"gnssdata.blh "<<gnssdata.blh<<"\n"<<std::endl;
+    std::cout<<"dz "<<dz<<"\n"<<std::endl;
+    // do EKF update to update covariance and error state
+    EKFUpdate(dz, H_gnsspos, R_gnsspos);
+
+    // GNSS更新之后设置为不可用
+    // Set GNSS invalid after update
+    gnssdata.isvalid = false;
   }
 
+  //  void LIOEKF::gnssUpdate(const GNSS &gnss_meas) {
 
+  //     Eigen::Vector3d gnss_pos_local = Earth::blhToEnu(gnss_init_val, gnss_meas.blh);
+  //     // Eigen::Vector3d gnss_pos_local = Earth::blh2ecef(gnss_meas.blh);
+  //     Eigen::Vector3d predicted_position = bodystate_cur_.pose.translation();
+  //     Eigen::MatrixXd dz = (gnss_pos_local - predicted_position).cast<double>();  
+  //     Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 15);  
+  //     H.block<3, 3>(0, POS_ID) = Eigen::Matrix3d::Identity();  
+  //     Eigen::MatrixXd R = gnss_meas.covariance.cast<double>();
 
+  //     // std::cout<<"gnss_init_val "<<gnss_init_val<<"\n"<<std::endl;
+  //     // std::cout<<"gnss_init_timestamp "<<std::fixed << std::setprecision(10) <<gnss_init_timestamp<<"\n"<<std::endl;
+  //     std::cout<<"gnss_pos_local "<<gnss_pos_local<<"\n"<<std::endl;
+  //     std::cout<<"predicted_position "<<predicted_position<<"\n"<<std::endl;
+  //     std::cout<<"dz "<<dz<<"\n"<<std::endl;
+  //     // std::cout<<"gnss_val "<<gnss_meas.blh<<"\n"<<std::endl;
+
+  //     std::cout << "Entered the GnssUpdate" << "\n" << std::endl;
+
+  //     ekfUpdate(dz, H, R);
+  // }
 
 } // namespace lio_ekf
 

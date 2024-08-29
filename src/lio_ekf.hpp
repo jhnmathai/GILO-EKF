@@ -66,7 +66,7 @@ public:
     imupre_ = imucur_;
     imucur_ = imu;
     // set current IMU timestamp as the current state timestamp
-    imu_t_ = imucur_.timestamp;
+    imu_t_ = imucur_.time;
 
     if (compensate) {
       imuCompensate(imucur_, imuerror_);
@@ -205,6 +205,7 @@ private:
   void gnssUpdate(const GNSS &gnssdata); 
 
 private:
+
   bool enter_if_flag = false;  
   bool gnns_first_flag = true;
   double gnss_init_timestamp;

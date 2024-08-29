@@ -269,18 +269,18 @@ void OdometryServer::imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
   mtx_buffer_.lock();
 
   lio_ekf::IMU imu_meas;
-  imu_meas.timestamp = timestamp;
+  imu_meas.time = timestamp;
 
   imu_meas.dt = timestamp - last_timestamp_imu_;
-  imu_meas.angular_velocity << msg->angular_velocity.x, msg->angular_velocity.y,
+  imu_meas.dtheta << msg->angular_velocity.x, msg->angular_velocity.y,
       msg->angular_velocity.z;
 
-  imu_meas.linear_acceleration << msg->linear_acceleration.x,
+  imu_meas.dvel << msg->linear_acceleration.x,
       msg->linear_acceleration.y, msg->linear_acceleration.z;
 
-  imu_meas.angular_velocity = lio_para_.imu_tran_R * imu_meas.angular_velocity;
-  imu_meas.linear_acceleration =
-      lio_para_.imu_tran_R * imu_meas.linear_acceleration;
+  imu_meas.dtheta = lio_para_.imu_tran_R * imu_meas.dtheta;
+  imu_meas.dvel =
+      lio_para_.imu_tran_R * imu_meas.dvel;
 
   //
   
