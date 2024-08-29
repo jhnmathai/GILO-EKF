@@ -142,7 +142,7 @@ struct GNSS {
     double timestamp;
 
     Eigen::Vector3d blh;
-    Eigen::Vector3d std;
+    Eigen::Matrix3d covariance;
 
     bool isvalid;
 };

@@ -56,14 +56,14 @@ void LIOEKF::init() {
   gnss_t_ = 0.0;
   // resize covariance matrix, system noise matrix, and system error state
   // matrix
-  /**********
-  Eigen::Vector3d position(-2853304.23867, 4667242.82476, 3268689.57298);
-  Eigen::Quaterniond orientation(0.008546, -5.8e-05, 0.088664, 0.996025);
-  bodystate_cur_.pose.translation() = position;
-  bodystate_cur_.pose.setQuaternion(orientation);
-  std::cout << "Initial pose (SE3): " << std::endl << bodystate_pre_.pose.matrix() << std::endl;
-  std::cout << "Initial velocity (Vector3d): " << bodystate_pre_.vel.transpose() << std::endl;
-  ************/
+
+  // Eigen::Vector3d position(-2853304.23867, 4667242.82476, 3268689.57298);
+  // Eigen::Quaterniond orientation(0.996025, 0.008546, -5.8e-05, 0.088664);
+  // bodystate_cur_.pose.translation() = position;
+  // bodystate_cur_.pose.setQuaternion(orientation);
+  // std::cout << "Initial pose (SE3): " << std::endl << bodystate_cur_.pose.matrix() << std::endl;
+  // std::cout << "Initial velocity (Vector3d): " << bodystate_cur_.vel.transpose() << std::endl;
+ 
 
   double D2R = (M_PI / 180.0);
   double R2D = (180.0 / M_PI);
@@ -77,7 +77,7 @@ void LIOEKF::init() {
   //   Eigen::Vector3d(0,0,0),
   //   true
   // };
-  // origin_ = gnss_start_.blh;
+  // origin_ = blh_val;
   
   // Eigen::Quaterniond orient(0.996134, 0.008177, -5e-06, 0.087466);
   // // bodystate_cur_.pose.setQuaternion(orient);
@@ -102,22 +102,25 @@ void LIOEKF::init() {
   // bodystate_cur_.pose.setQuaternion(q_enu);
 
 
-  Eigen::Quaterniond q_enu_1(0.996134, 0.008177 , -5e-06, 0.087466);
-  Eigen::Matrix3d r_Mat = q_enu_1.toRotationMatrix();
-  Eigen::Vector3d euler = r_Mat.eulerAngles(2, 1, 0); 
-  euler = euler * (180.0 / M_PI);
-  std::cout << "Quat 0.996134, 0.008177 , -5e-06, 0.087466" <<"\n";
-  std::cout << "Yaw (Z): " << euler[0] << "\n";
-  std::cout << "Pitch (Y): " << euler[1] << "\n";
-  std::cout << "Roll (X): " << euler[2] << "\n";
-  Eigen::Quaterniond q_enu_2(0.996026, 0.008551, -7e-05, 0.08865);
-  Eigen::Matrix3d rotationMatrix = q_enu_2.toRotationMatrix();
-  Eigen::Vector3d eul = rotationMatrix.eulerAngles(2, 1, 0); 
-  eul = eul * (180.0 / M_PI);
-  std::cout << "Quat 0.996026, 0.008551, -7e-05, 0.08865" <<"\n";
-  std::cout << "Yaw (Z): " << eul[0] << "\n";
-  std::cout << "Pitch (Y): " << eul[1] << "\n";
-  std::cout << "Roll (X): " << eul[2] << "\n";
+  // Eigen::Quaterniond q_enu_1(0.996134, 0.008177 , -5e-06, 0.087466);
+  // Eigen::Matrix3d r_Mat = q_enu_1.toRotationMatrix();
+  // Eigen::Vector3d euler = r_Mat.eulerAngles(2, 1, 0); 
+  // euler = euler * (180.0 / M_PI);
+  // std::cout << "Quat 0.996134, 0.008177 , -5e-06, 0.087466" <<"\n";
+  // std::cout << "Yaw (Z): " << euler[0] << "\n";
+  // std::cout << "Pitch (Y): " << euler[1] << "\n";
+  // std::cout << "Roll (X): " << euler[2] << "\n";
+  // Eigen::Quaterniond q_enu_2(0.996026, 0.008551, -7e-05, 0.08865);
+  // Eigen::Matrix3d rotationMatrix = q_enu_2.toRotationMatrix();
+  // Eigen::Vector3d eul = rotationMatrix.eulerAngles(2, 1, 0); 
+  // eul = eul * (180.0 / M_PI);
+  // std::cout << "Quat 0.996026, 0.008551, -7e-05, 0.08865" <<"\n";
+  // std::cout << "Yaw (Z): " << eul[0] << "\n";
+  // std::cout << "Pitch (Y): " << eul[1] << "\n";
+  // std::cout << "Roll (X): " << eul[2] << "\n";
+
+
+
   // std::cout << "Initial Rnw " << std::endl <<Rnw << std::endl;
   // std::cout << "Rnw transform" << std::endl <<Rnw * bodystate_cur_.pose.translation() << std::endl;
   
@@ -156,6 +159,7 @@ void LIOEKF::init() {
 
   is_first_imu_ = true;
   is_first_lidar_ = true;
+  is_first_gnss_ = true;
 }
 
 void LIOEKF::navStateInitialization(const NavState &initstate,
@@ -210,6 +214,7 @@ void LIOEKF::initFirstLiDAR(const int lidarUpdateFlag) {
   first_lidar_t = lidar_t_;
 }
 
+
 void LIOEKF::newImuProcess() {
 
   if (is_first_imu_) {
@@ -221,73 +226,148 @@ void LIOEKF::newImuProcess() {
   }
 
   // set update time as the lidar time stamp
-  double updatetime = lidar_t_;
+  double updatetimeLidar = lidar_t_;
 
   int lidarUpdateFlag = 0;
 
-  if (lidar_t_ > last_update_t_ + 0.001 || is_first_lidar_)
-    lidarUpdateFlag =
-        isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetime);
-  // determine if we should do  update
+  
+  if(enter_if_flag) { 
+    if (lidar_t_ > last_update_t_ + 0.001 || is_first_lidar_)
+      lidarUpdateFlag =
+          isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetimeLidar);
+    // determine if we should do  update
 
-  switch (lidarUpdateFlag) {
-  case 0: {
-    // only propagate navigation state
-    statePropagation(imupre_, imucur_);
-    break;
-  }
-  case 1: {
-    // lidardata is near to the previous imudata, we should firstly do lidar
-    // update
-    if (is_first_lidar_) {
-      initFirstLiDAR(lidarUpdateFlag);
-    } else {
-      lidarUpdate();
+    switch (lidarUpdateFlag) {
+    case 0: {
+      std::cout << "Lidar Case 0 entered "<< "\n";
+      // only propagate navigation state
+      statePropagation(imupre_, imucur_);
+      break;
     }
+    case 1: {
+      // lidardata is near to the previous imudata, we should firstly do lidar
+      // update
+      std::cout << "Lidar Case 1 entered "<< "\n";
+      if (is_first_lidar_) {
+        initFirstLiDAR(lidarUpdateFlag);
+      } else {
+        lidarUpdate();
+      }
 
-    lidar_updated_ = true;
+      lidar_updated_ = true;
 
-    bodystate_pre_ = bodystate_cur_;
-    statePropagation(imupre_, imucur_);
-    break;
-  }
-  case 2: {
-    // lidardata is near current imudata, we should firstly propagate navigation
-    // state
-    statePropagation(imupre_, imucur_);
-    if (is_first_lidar_) {
-      initFirstLiDAR(lidarUpdateFlag);
-    } else {
-      lidarUpdate();
+      bodystate_pre_ = bodystate_cur_;
+      statePropagation(imupre_, imucur_);
+      break;
     }
+    case 2: {
+      // lidardata is near current imudata, we should firstly propagate navigation
+      // state
+      std::cout << "Lidar Case 2 entered "<< "\n";
+      statePropagation(imupre_, imucur_);
+      if (is_first_lidar_) {
+        initFirstLiDAR(lidarUpdateFlag);
+      } else {
+        lidarUpdate();
+      }
 
-    lidar_updated_ = true;
+      lidar_updated_ = true;
 
-    break;
-  }
-  case 3: {
-    // lidardata is between the two imudata, we interpolate current imudata to
-    // lidar time
-    IMU midimu;
-    imuInterpolate(imupre_, imucur_, updatetime, midimu);
-
-    // propagate navigation state for the first half imudata
-    statePropagation(imupre_, midimu);
-
-    // do lidar position update at the whole second and feedback system states
-    if (is_first_lidar_) {
-      initFirstLiDAR(lidarUpdateFlag);
-    } else {
-      lidarUpdate();
+      break;
     }
+    case 3: {
+      // lidardata is between the two imudata, we interpolate current imudata to
+      // lidar time
+      std::cout << "Lidar Case 3 entered "<< "\n";
+      IMU midimu;
+      imuInterpolate(imupre_, imucur_, updatetimeLidar, midimu);
 
-    lidar_updated_ = true;
-    // propagate navigation state for the second half imudata
-    bodystate_pre_ = bodystate_cur_;
-    statePropagation(midimu, imucur_);
-    break;
+      // propagate navigation state for the first half imudata
+      statePropagation(imupre_, midimu);
+
+      // do lidar position update at the whole second and feedback system states
+      if (is_first_lidar_) {
+        initFirstLiDAR(lidarUpdateFlag);
+      } else {
+        lidarUpdate();
+      }
+
+      lidar_updated_ = true;
+      // propagate navigation state for the second half imudata
+      bodystate_pre_ = bodystate_cur_;
+      statePropagation(midimu, imucur_);
+      break;
+    }
+    }
   }
-  }
+  ///////////////////////////////////////////////////////////////////////////////////////////
+  /////////GNSS Update///////////////
+    
+
+    double updatetimeGnss = gnss_t_;
+
+    if (updatetimeGnss!=0) {
+      int GnssUpdateFlag = 0;
+      bool gnss_updated_ = false;
+
+      GnssUpdateFlag = isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetimeGnss);
+    
+      // std::cout<<"updatetimeGnss "<<std::fixed << std::setprecision(10)<<updatetimeGnss<<"\n"<<std::endl;
+
+      switch (GnssUpdateFlag) {
+      case 0: {
+        // enter_if_flag = true;
+        // only propagate navigation state
+        // std::cout<<"GNSS Case 0"<<"\n"<<std::endl;
+        // statePropagation(imupre_, imucur_);
+        break;
+      }
+      case 1: {
+        enter_if_flag = true;
+        std::cout<<"GNSS Case 1"<<"\n"<<std::endl;
+        gnssUpdate(gnsscur_);
+        gnss_updated_ = true;
+        stateFeedback();
+
+        bodystate_pre_ = bodystate_cur_;
+        statePropagation(imupre_, imucur_);
+        break;
+      }
+      case 2: {
+        enter_if_flag = true;
+        std::cout<<"GNSS Case 2"<<"\n"<<std::endl;
+        // lidardata is near current imudata, we should firstly propagate navigation
+        // state
+        statePropagation(imupre_, imucur_);
+        gnssUpdate(gnsscur_);
+        stateFeedback();
+        
+        gnss_updated_ = true;
+
+        break;
+      }
+      case 3: {
+        enter_if_flag = true;
+        std::cout<<"GNSSCase 3"<<"\n"<<std::endl;
+        // lidardata is between the two imudata, we interpolate current imudata to
+        // lidar time
+        IMU midimu;
+        imuInterpolate(imupre_, imucur_, updatetimeGnss, midimu);
+
+        // propagate navigation state for the first half imudata
+        statePropagation(imupre_, midimu);
+        gnssUpdate(gnsscur_);
+        stateFeedback();
+
+        gnss_updated_ = true;
+        // propagate navigation state for the second half imudata
+        bodystate_pre_ = bodystate_cur_;
+        statePropagation(midimu, imucur_);
+        break;
+      }
+      }
+    }
+////////////////////////////////////////////////////////////////////////////////////////////
 
   // check diagonal elements of current covariance matrix
   checkStateCov();
@@ -296,6 +376,9 @@ void LIOEKF::newImuProcess() {
   bodystate_pre_ = bodystate_cur_;
   imupre_ = imucur_;
 }
+
+
+
 
 void LIOEKF::statePropagation(IMU &imupre, IMU &imucur) {
 
@@ -632,51 +715,33 @@ Eigen::Matrix4d LIOEKF::poseTran(const Eigen::Matrix4d pose1,
 
 
 
-// void LIOEKF::gnssUpdate(GNSS &gnssdata) {
+  void LIOEKF::gnssUpdate(const GNSS &gnss_meas) {
+
+      Eigen::Vector3d gnss_pos_local = Earth::blhToEnu(gnss_init_val, gnss_meas.blh);
+      // Eigen::Vector3d gnss_pos_local = Earth::blh2ecef(gnss_meas.blh);
+      Eigen::Vector3d predicted_position = bodystate_cur_.pose.translation();
+      Eigen::MatrixXd dz = (gnss_pos_local - predicted_position).cast<double>();  
+      Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 15);  
+      H.block<3, 3>(0, POS_ID) = Eigen::Matrix3d::Identity();  
+      Eigen::MatrixXd R = gnss_meas.covariance.cast<double>();
+
+      // std::cout<<"gnss_init_val "<<gnss_init_val<<"\n"<<std::endl;
+      // std::cout<<"gnss_init_timestamp "<<std::fixed << std::setprecision(10) <<gnss_init_timestamp<<"\n"<<std::endl;
+      std::cout<<"gnss_pos_local "<<gnss_pos_local<<"\n"<<std::endl;
+      std::cout<<"predicted_position "<<predicted_position<<"\n"<<std::endl;
+      std::cout<<"dz "<<dz<<"\n"<<std::endl;
+      // std::cout<<"gnss_val "<<gnss_meas.blh<<"\n"<<std::endl;
+
+      std::cout << "Entered the GnssUpdate" << "\n" << std::endl;
+
+      ekfUpdate(dz, H, R);
+  }
 
 
-//     // convert IMU position to GNSS antenna phase center position
-   
-//     Eigen::Vector3d antenna_pos;
-//     Eigen::Matrix3d Dr, Dr_inv;
-    
-//     Dr_inv      = Earth::DRi(bodystate_cur_.pose.translation());
-//     Dr          = Earth::DR(bodystate_cur_.pose.translation());
-
-//     // antenna_pos = bodystate_cur_.pose + Dr_inv * bodystate_cur_.pose.rotationMatrix() * options_.antlever;
-    
-
-//     // compute GNSS position innovation
-    
-//     // GNSS位置测量新息
-//     // compute GNSS position innovation
-//     Eigen::MatrixXd dz;
-//     dz = Dr * (antenna_pos - gnssdata.blh);
-
-//     // 构造GNSS位置观测矩阵
-//     // construct GNSS position measurement matrix
-//     Eigen::MatrixXd H_gnsspos;
-//     H_gnsspos.resize(3, Cov_.rows());
-//     H_gnsspos.setZero();
-//     H_gnsspos.block(0, P_ID, 3, 3)   = Eigen::Matrix3d::Identity();
-//     H_gnsspos.block(0, PHI_ID, 3, 3) = Rotation::skewSymmetric(pvacur_.att.cbn * options_.antlever);
-
-//     // 位置观测噪声阵
-//     // construct measurement noise matrix
-//     Eigen::MatrixXd R_gnsspos;
-//     R_gnsspos = gnssdata.std.cwiseProduct(gnssdata.std).asDiagonal();
-
-//     // EKF更新协方差和误差状态
-//     // do EKF update to update covariance and error state
-//     EKFUpdate(dz, H_gnsspos, R_gnsspos);
-
-//     // GNSS更新之后设置为不可用
-//     // Set GNSS invalid after update
-//     gnssdata.isvalid = false;
-// }
 
 
 } // namespace lio_ekf
+
 
 
 

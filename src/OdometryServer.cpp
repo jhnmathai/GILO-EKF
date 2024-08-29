@@ -249,7 +249,7 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
           else if (!gnss_buffer_.empty() && lio_ekf_.getGnsstimestamp() < lio_ekf_.getImutimestamp()) {
               lio_ekf_.addGnssData(gnss_buffer_);
               ind =ind +1;
-              std::cout<<"Val of i is"<<ind<<std::endl;
+              // std::cout<<"Val of i is"<<ind<<"\n"<<std::endl;
           }
       }
 
@@ -342,11 +342,20 @@ void OdometryServer::gnss_cbk(const sensor_msgs::NavSatFix::ConstPtr &msg_in) {
     lio_ekf::GNSS gnss_meas;
     gnss_meas.timestamp = timestamp;
 
-    gnss_meas.blh << msg->latitude, msg->longitude, msg->altitude;
+    // Convert latitude and longitude to radians and altitude remains in meters
+    gnss_meas.blh << msg->latitude * M_PI / 180.0,  // Convert to radians
+                     msg->longitude * M_PI / 180.0, // Convert to radians
+                     msg->altitude;                 // Altitude in meters
 
-    // Assuming you have a status flag to check GNSS validity
+    // Populate the covariance matrix
+    gnss_meas.covariance << msg->position_covariance[0], msg->position_covariance[1], msg->position_covariance[2],
+                            msg->position_covariance[3], msg->position_covariance[4], msg->position_covariance[5],
+                            msg->position_covariance[6], msg->position_covariance[7], msg->position_covariance[8];
+
+    // Set validity based on GNSS status
     gnss_meas.isvalid = (msg->status.status >= sensor_msgs::NavSatStatus::STATUS_FIX);
 
+    // Add GNSS data to buffer or update directly
     gnss_buffer_.push_back(gnss_meas);
 
     last_timestamp_gnss_ = timestamp;
@@ -354,6 +363,8 @@ void OdometryServer::gnss_cbk(const sensor_msgs::NavSatFix::ConstPtr &msg_in) {
     mtx_buffer_.unlock();
     sig_buffer_.notify_all();
 }
+
+
 
 
 
@@ -395,14 +406,14 @@ void OdometryServer::gnss_cbk(const sensor_msgs::NavSatFix::ConstPtr &msg_in) {
 
 //   const auto rotmat_imu = lio_para_.imu_tran_R.inverse();
 
-  // Eigen::Vector3d pos = rotmat_imu * navstate.pos;
+//   // Eigen::Vector3d pos = rotmat_imu * navstate.pos;
 //   Eigen::Vector3d pos = navstate.pos;
 //   Eigen::Vector3d origin_ecef(-2853304.23867, 4667242.82476, 3268689.57298);
 //   Eigen::Vector3d origin_ = Earth::ecef2blh(origin_ecef);
 //   pos = Earth::ecef2blh(pos);
-//   Eigen::Vector3d local_pos = Earth::global2local(origin_, pos);
-//   Eigen::Vector3d local_ned = rotmat_imu * local_pos;
-//   pos = Earth::local2global(origin_, local_ned);
+//   Eigen::Vector3d local_pos = Earth::blhToEnu(origin_, pos);
+//   // Eigen::Vector3d local_ned = rotmat_imu * local_pos;
+//   pos = Earth::local2global(origin_, local_pos);
   
 //   // transform pose from the used imu frame (front-right-down) to the original
 //   // imu frame
@@ -432,11 +443,15 @@ void OdometryServer::writeResults(std::ofstream &odo) {
 
   const auto rotmat_imu = lio_para_.imu_tran_R.inverse();
 
-  Eigen::Vector3d pos = rotmat_imu * navstate.pos;
-
-  Eigen::Vector3d posi(-2853304.23867, 4667242.82476, 3268689.57298);
-  Eigen::Vector3d origin_ = Earth::ecef2blh(posi);
-  Eigen::Quaterniond q_enu(0.996026, 0.008551, -7e-05, 0.08865);
+  // Eigen::Vector3d pos = rotmat_imu * navstate.pos;
+  Eigen::Vector3d pos = navstate.pos;
+  // Eigen::Vector3d posi(-2853304.23867, 4667242.82476, 3268689.57298);
+  // Eigen::Vector3d origin_ = Earth::ecef2blh(posi);
+  double lati = 0.5415641126547546;   // latitude in radians
+  double longi = 2.1195173569675125;  // longitude in radians
+  double hei = 23.899;
+  Eigen::Vector3d origin_(lati, longi, hei);
+  Eigen::Quaterniond q_enu(0.996021, 0.008567, -0.000132, 0.088701);
   
   Eigen::Matrix3d R_enu = q_enu.toRotationMatrix();
 
@@ -448,7 +463,7 @@ void OdometryServer::writeResults(std::ofstream &odo) {
   Eigen::Matrix3d R_ned = R_enu_to_ned * R_enu;
   Eigen::Quaterniond q_ned(R_ned);
   Eigen::Matrix3d Rnw = q_ned.toRotationMatrix();
-  Eigen::Vector3d blh_val = Earth::local2global(origin_, Rnw * pos);
+  Eigen::Vector3d blh_val = Earth::local2global(origin_, R_enu * pos);
   // transform pose from the used imu frame (front-right-down) to the original
   // imu frame
   Eigen::Matrix3d rotmat = lio_para_.imu_tran_R.inverse() *

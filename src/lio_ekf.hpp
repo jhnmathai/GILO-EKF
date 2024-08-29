@@ -105,6 +105,12 @@ public:
     gnsscur_ = gnss_meas;
     gnss_t_ = gnsscur_.timestamp;
 
+    if(gnns_first_flag) {
+      gnss_init_timestamp = gnss_t_;
+      gnss_init_val = gnsscur_.blh;
+      gnns_first_flag = false;
+    }
+
     gnss_buffer_.pop_front();
   }
 
@@ -152,6 +158,9 @@ public:
   Eigen::Vector3d deskewPoint(
       const Eigen::Vector3d &point, const double &timestamp,
       const std::vector<std::pair<double, Sophus::SE3d>> &posesWithinScan);
+  
+  void lidarUpdateProcess();
+  void gnssUpdateProcess();
 
 private:
   void navStateInitialization(const NavState &initstate,
@@ -193,9 +202,16 @@ private:
 
   void resetCov(Eigen::Matrix15d &Cov);
 
-  void gnssUpdate(GNSS &gnssdata); 
+  void gnssUpdate(const GNSS &gnssdata); 
 
 private:
+  bool enter_if_flag = false;  
+  bool gnns_first_flag = true;
+  double gnss_init_timestamp;
+  Eigen::Vector3d gnss_init_val;
+  bool gnss_updated_ = false;
+
+  std::deque<GNSS> gnss_buffer_; 
   GNSS gnss_start_; 
   LIOPara liopara_;
   Eigen::Vector3d origin_ecef_;
@@ -250,5 +266,6 @@ private:
   bool lio_initialized_ = false;
   bool is_first_imu_ = true;
   bool is_first_lidar_ = true;
+  bool is_first_gnss_ = true;
 };
 } // namespace lio_ekf

@@ -94,6 +94,50 @@ public:
     }
 
 
+    static Vector3d blhToEnu(const Vector3d &blh_ref, const Vector3d &blh) {
+        // WGS84 ellipsoid constants
+        double a = WGS84_RA;
+        double e = 8.1819190842622e-2;
+
+        // Reference point in radians
+        double lat_ref = blh_ref[0];  // latitude in radians
+        double lon_ref = blh_ref[1];  // longitude in radians
+        double alt_ref = blh_ref[2];  // altitude in meters
+
+        // Point to be transformed (BLH in radians)
+        double lat = blh[0];  // latitude in radians
+        double lon = blh[1];  // longitude in radians
+        double alt = blh[2];  // altitude in meters
+
+        // Convert reference point from BLH to ECEF
+        double N_ref = a / sqrt(1 - e * e * sin(lat_ref) * sin(lat_ref));
+        double x_r = (N_ref + alt_ref) * cos(lat_ref) * cos(lon_ref);
+        double y_r = (N_ref + alt_ref) * cos(lat_ref) * sin(lon_ref);
+        double z_r = (N_ref * (1 - e * e) + alt_ref) * sin(lat_ref);
+
+        // Convert point from BLH to ECEF
+        double N = a / sqrt(1 - e * e * sin(lat) * sin(lat));
+        double x = (N + alt) * cos(lat) * cos(lon);
+        double y = (N + alt) * cos(lat) * sin(lon);
+        double z = (N * (1 - e * e) + alt) * sin(lat);
+
+        // Compute the difference between the point and the reference point in ECEF
+        double dx = x - x_r;
+        double dy = y - y_r;
+        double dz = z - z_r;
+
+        // Compute the rotation matrix from ECEF to ENU
+        Matrix3d R;
+        R << -sin(lon_ref), cos(lon_ref), 0,
+             -sin(lat_ref) * cos(lon_ref), -sin(lat_ref) * sin(lon_ref), cos(lat_ref),
+             cos(lat_ref) * cos(lon_ref), cos(lat_ref) * sin(lon_ref), sin(lat_ref);
+
+        // Apply the rotation matrix to the difference vector (ECEF to ENU)
+        Vector3d enu = R * Vector3d(dx, dy, dz);
+
+        return enu;
+    }
+
     static Vector3d blh(const Quaterniond &qne, double height) {
         return {-2 * atan(qne.y() / qne.w()) - M_PI * 0.5, 2 * atan2(qne.z(), qne.w()), height};
     }
