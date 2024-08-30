@@ -34,7 +34,7 @@
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
-
+#include <earth.hpp>
 namespace {
 Eigen::Vector3d SIGMA_POINT =
     Eigen::Vector3d(0.01, 0.05 * lio_ekf::D2R, 0.05 * lio_ekf::D2R);
@@ -78,6 +78,64 @@ void LIOEKF::init() {
 
   // set initial state (position, velocity, attitude and IMU error) and
   // covariance
+  
+  // Eigen::Vector3d position(-2853536.61866, 4667028.09832, 3268793.96);
+  // // Eigen::Matrix3d R_enu_to_ned;
+  // //   R_enu_to_ned << 0, 1, 0,
+  // //                   1, 0, 0,
+  // //                   0, 0, -1;
+  // liopara_.initstate.pos = position;
+
+
+  Eigen::Quaterniond enu_orientation(0.185052, -0.004201, -0.006062, -0.982701);
+   // Quaternion for 90-degree rotation around Z-axis (ENU to EUN)
+  Eigen::Quaterniond rotation_90_z(Eigen::AngleAxisd(-M_PI / 2, Eigen::Vector3d::UnitZ()));
+  // Quaternion for 180-degree rotation around X-axis (ENU to END)
+  Eigen::Quaterniond rotation_180_x(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
+  // Combined rotation (ENU to NED)
+  Eigen::Quaterniond ned_orientation = rotation_180_x * rotation_90_z * enu_orientation;
+   Eigen::Vector3d eulerAngles = Rotation::quaternion2euler(ned_orientation);
+
+  //  liopara_.initstate.euler = eulerAngles;
+  // Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+  // liopara_.initstate.pos = Earth::blhToEnu(origin_blh, origin_blh);
+
+  // Eigen::Matrix3d R;
+  //   R << 1,  0,  0,
+  //        0, -1,  0,
+  //        0,  0, -1;
+
+  // Eigen::Vector3d rotated_position = R * position;
+
+  // Eigen::Quaterniond enu_orientation(0.185052, -0.004201, -0.006062, -0.982701);
+  // Eigen::Quaterniond ned_orientation = Eigen::Quaterniond(0, 1, 0, 0) * enu_orientation * Eigen::Quaterniond(0, 0, 0, 1);
+  // Eigen::Quaterniond enu_to_ned = Eigen::Quaterniond(0, M_SQRT1_2, -M_SQRT1_2, 0);
+  
+  // Apply rotation to orientation
+  // Eigen::Quaterniond rotation_quat(R);
+  // Eigen::Quaterniond rotated_orientation = rotation_quat * enu_orientation * rotation_quat.inverse();
+  // Normalize the quaternion (if not normalized)
+  //    // Normalize the quaternion (if not normalized)
+  //   enu_orientation.normalize();
+
+  //   // Quaternion representing 180 degrees rotation about x-axis
+  //   Eigen::Quaterniond rotation_x_180(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
+
+    // // Quaternion representing 90 degrees rotation about z-axis
+    // Eigen::Quaterniond rotation_x_90(Eigen::AngleAxisd(M_PI_2, Eigen::Vector3d::UnitX()));
+
+    // // Apply the rotations in sequence: first 180 degrees about x-axis, then 90 degrees about z-axis
+    // Eigen::Quaterniond ned_orientation =   rotation_x_90 * enu_orientation;
+
+  //   // Normalize the result to ensure it is a valid quaternion
+    // ned_orientation.normalize();
+  // Eigen::Vector3d eulerAngles = Rotation::quaternion2euler(enu_orientation);
+
+  // liopara_.initstate.pos = rotated_position;
+  liopara_.initstate.euler = eulerAngles;
+
+  
+  std::cout<<"liopara_.initstate.pos "<<liopara_.initstate.pos<<"\n"; 
   navStateInitialization(liopara_.initstate, liopara_.initstate_std);
 
   is_first_imu_ = true;
@@ -86,6 +144,11 @@ void LIOEKF::init() {
 
 void LIOEKF::navStateInitialization(const NavState &initstate,
                                     const NavState &initstate_std) {
+  
+  bodystate_cur_.pose.translation() = initstate.pos;
+  Eigen::Matrix3d rotation_matrix = Rotation::euler2matrix(initstate.euler);
+  bodystate_cur_.pose.so3() = Sophus::SO3d(rotation_matrix);
+
 
   // initialize imu error
   imuerror_ = initstate.imuerror;
@@ -486,6 +549,8 @@ void LIOEKF::stateFeedback() {
   imuerror_.gyrbias += delta_bias_gyro;
   Eigen::Vector3d delta_bias_acc = delta_x_.block(ACC_BIAS_ID, 0, 3, 1);
   imuerror_.accbias += delta_bias_acc;
+
+  delta_x_.setZero();
 }
 
 NavState LIOEKF::getNavState() {
@@ -523,5 +588,42 @@ Eigen::Matrix4d LIOEKF::poseTran(const Eigen::Matrix4d pose1,
 
   return pose;
 }
+
+// void LIOEKF::gnssUpdate(const GNSS &gnssdata) {
+
+//   Eigen::Vector3d antenna_pos;
+//   Eigen::Matrix3d Dr, Dr_inv;
+//   Eigen::Vector3d antlever(0,0,0);
+//   Dr_inv      = Earth::DRi(bodystate_cur_.pose.translation());
+//   Dr          = Earth::DR(bodystate_cur_.pose.translation());
+//   antenna_pos = bodystate_cur_.pose.translation() + Dr_inv * bodystate_cur_.pose.rotationMatrix() * antlever;
+
+//   // compute GNSS position innovation
+//   Eigen::MatrixXd dz;
+//   dz = Dr * (antenna_pos - gnssdata.blh);
+  
+  
+//   // construct GNSS position measurement matrix
+  
+//   Eigen::MatrixXd H_gnsspos = Eigen::MatrixXd::Zero(3, 15);  
+//   H_gnsspos.block<3, 3>(0, POS_ID) = Eigen::Matrix3d::Identity();  
+//   // H_gnsspos.block(0, PHI_ID, 3, 3) = Rotation::skewSymmetric(pvacur_.pose.rotationMatrix() * options_.antlever);
+
+  
+//   // construct measurement noise matrix
+//   Eigen::MatrixXd R_gnsspos;
+//   // R_gnsspos = gnssdata.std.cwiseProduct(gnssdata.std).asDiagonal();
+//   R_gnsspos = gnssdata.covariance.cast<double>();
+  
+//   std::cout<<"Calculated pose"<<antenna_pos<<"\n"<<std::endl;
+//   std::cout<<"gnssdata.blh "<<gnssdata.blh<<"\n"<<std::endl;
+//   std::cout<<"dz "<<dz<<"\n"<<std::endl;
+//   // do EKF update to update covariance and error state
+//   ekfUpdate(dz, H_gnsspos, R_gnsspos);
+
+//   // GNSS更新之后设置为不可用
+//   // Set GNSS invalid after update
+//   // gnssdata.isvalid = false;
+// }
 
 } // namespace lio_ekf

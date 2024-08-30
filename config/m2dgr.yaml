@@ -32,6 +32,10 @@ lio:
                    0, 1, 0, 
                    0, 0, 1]
     #transform the imu frame to front-right-down (which is used in the code)
+    # imu_tran_R: [1,0,0,
+    #              0,-1,0,
+    #              0,0,-1]
+
     imu_tran_R: [1,0,0,
-                 0,-1,0,
-                 0,0,-1]
+        0,1,0,
+        0,0,1]
