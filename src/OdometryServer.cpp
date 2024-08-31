@@ -400,7 +400,7 @@ void OdometryServer::writeResults(std::ofstream &odo) {
   // Eigen::Vector3d pos = rotmat_imu * navstate.pos;
   Eigen::Vector3d pos = navstate.pos;
 
-  int street = 5;
+  int street = 6;
   if(street == 3) {
 
     Eigen::Vector3d position(-2853189.74594, 4667528.98078, 3268382.90545);
@@ -408,11 +408,17 @@ void OdometryServer::writeResults(std::ofstream &odo) {
     pos = Earth::local2global(origin_blh, pos);
     pos = Earth::blh2ecef(pos);
   }
+  if(street == 4) {
+    Eigen::Vector3d position(-2853421.14557, 4667372.61299, 3268404.01841);
+    Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+    pos = Earth::local2global(origin_blh, pos);
+    pos = Earth::blh2ecef(pos);
+  }
+
   if(street == 5) {
     
     Eigen::Vector3d position(-2853304.25225, 4667242.81293, 3268689.58877);
     Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
-
     pos = Earth::local2global(origin_blh, pos);
     pos = Earth::blh2ecef(pos);
   }
@@ -420,7 +426,6 @@ void OdometryServer::writeResults(std::ofstream &odo) {
     
     Eigen::Vector3d position(-2853536.61866, 4667028.09832, 3268793.96);
     Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
-
     pos = Earth::local2global(origin_blh, pos);
     pos = Earth::blh2ecef(pos);
   }

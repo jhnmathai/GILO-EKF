@@ -86,6 +86,7 @@ public:
       gnss_init_timestamp = gnss_t_;
       gnss_init_val = gnsscur_.blh;
       gnns_first_flag = false;
+      std::cout<<"GNSS inital val \n"<<gnsscur_.blh<<"\n";
     }
 
     gnss_buffer_.pop_front();
@@ -202,7 +203,7 @@ private:
   void resetCov(Eigen::Matrix15d &Cov);
 
 private:
-  int street = 5;
+  int street = 6;
 
    bool enter_if_flag = false;  
   bool gnns_first_flag = true;

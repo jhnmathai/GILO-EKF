@@ -82,13 +82,13 @@ void LIOEKF::init() {
 
 
   Eigen::Quaterniond enu_orientation;
-  std::cout<<"Value of street is "<<street<<"/n";
+  std::cout<<"Value of street is "<<street<<"/n"<<std::endl;
 
   if (street == 3) {
       enu_orientation = Eigen::Quaterniond(0.986916, -0.000821, -0.004566, 0.161171);
   }
   if (street == 4) {
-      enu_orientation = Eigen::Quaterniond(0.986916, -0.000821, -0.004566, 0.161171);
+      enu_orientation = Eigen::Quaterniond(0.011578, 0.002356, 0.021849, 0.999691);
   }
   if (street == 5) {
       enu_orientation = Eigen::Quaterniond(0.996022, 0.008558, -0.000113, 0.088699);
@@ -104,7 +104,7 @@ void LIOEKF::init() {
   liopara_.initstate.euler = eulerAngles;
 
   
-  std::cout<<"liopara_.initstate.pos "<<liopara_.initstate.pos<<"\n"; 
+  // std::cout<<"liopara_.initstate.pos "<<liopara_.initstate.pos<<"\n"; 
   navStateInitialization(liopara_.initstate, liopara_.initstate_std);
 
   is_first_imu_ = true;
@@ -176,6 +176,7 @@ void LIOEKF::newImuProcess() {
     return;
   }
 
+  // std::cout<<"The covariance matrix is "<<Cov_<<"\n";
   // set update time as the lidar time stamp
   double updatetime = lidar_t_;
 
@@ -623,17 +624,23 @@ void LIOEKF::gnssUpdate(const GNSS &gnss_meas) {
 
       Eigen::Vector3d gnss_pos_local;
       if(street == 3) {
-
         Eigen::Vector3d position(-2853189.74594, 4667528.98078, 3268382.90545);
         Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
         gnss_pos_local = Earth::global2local(origin_blh, gnss_meas.blh);
       }
+
+      if(street == 4) {
+        Eigen::Vector3d position(-2853421.14557, 4667372.61299, 3268404.01841);
+        Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+        gnss_pos_local = Earth::global2local(origin_blh, gnss_meas.blh);
+      }
+
       if(street == 5) {
-        
         Eigen::Vector3d position(-2853304.25225, 4667242.81293, 3268689.58877);
         Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
         gnss_pos_local = Earth::global2local(origin_blh, gnss_meas.blh);
       }
+
       if(street == 6) {
         
         Eigen::Vector3d position(-2853536.61866, 4667028.09832, 3268793.96);
@@ -656,7 +663,7 @@ void LIOEKF::gnssUpdate(const GNSS &gnss_meas) {
       std::cout<<"dz "<<dz<<"\n"<<std::endl;
       // std::cout<<"gnss_val "<<gnss_meas.blh<<"\n"<<std::endl;
 
-      std::cout << "Entered the GnssUpdate" << "\n" << std::endl;
+      // std::cout << "Entered the GnssUpdate" << "\n" << std::endl;
 
       ekfUpdate(dz, H, R);
   }
