@@ -31,13 +31,15 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <tf2_ros/transform_broadcaster.h>
+#include <sensor_msgs/NavSatFix.h>
 
+#include <tf2_ros/transform_broadcaster.h>
 #include "kiss_icp/pipeline/KissICP.hpp"
 #include "lio_ekf.hpp"
 #include "lio_types.hpp"
 
 namespace lio_ekf {
+
 
 class OdometryServer {
 public:
@@ -47,6 +49,7 @@ public:
   // buffer imu data
   void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in);
   void lidar_cbk(const sensor_msgs::PointCloud2ConstPtr &msg);
+  void gnss_cbk(const sensor_msgs::NavSatFix::ConstPtr &msg_in); 
 
   void writeResults(std::ofstream &odo);
 
@@ -68,14 +71,15 @@ private:
   ros::NodeHandle nh_;
   ros::NodeHandle pnh_;
   int queue_size_{1};
-  std::string lid_topic, imu_topic;
+  std::string lid_topic, imu_topic, gnss_topic;
 
   std::mutex mtx_buffer_;
 
-  double last_timestamp_imu_, last_timestamp_lidar_;
+  double last_timestamp_imu_, last_timestamp_lidar_, last_timestamp_gnss_;
 
   std::deque<std::vector<Eigen::Vector3d>> lidar_buffer_;
   std::deque<lio_ekf::IMU> imu_buffer_;
+  std::deque<lio_ekf::GNSS> gnss_buffer_;
   std::deque<double> lidar_time_buffer_;
   std::deque<std::vector<double>> points_per_scan_time_buffer_;
 
@@ -85,7 +89,7 @@ private:
   /// Data subscribers.
   ros::Subscriber pointcloud_sub_;
   ros::Subscriber imu_sub_;
-
+  ros::Subscriber gnss_sub_;
   /// Data publishers.
   ros::Publisher odom_publisher_;
   ros::Publisher traj_publisher_;

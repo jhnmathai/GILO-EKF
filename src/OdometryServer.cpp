@@ -25,6 +25,7 @@
 #include "OdometryServer.hpp"
 #include "rotation.hpp"
 
+
 #include <Eigen/Core>
 #include <condition_variable>
 #include <csignal>
@@ -70,6 +71,7 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
   // common
   nh_.param<std::string>("common/lidar_topic", lid_topic, "");
   nh_.param<std::string>("common/imu_topic", imu_topic, "");
+  nh_.param<std::string>("common/gnss_topic", gnss_topic, "");
 
   nh_.getParam("outputdir", outputdir);
 
@@ -145,6 +147,7 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
   lio_para_.initstate_std.imuerror.gyrbias = lio_para_.imunoise.gyrbias_std;
   lio_para_.initstate_std.imuerror.accbias = lio_para_.imunoise.accbias_std;
 
+
   lio_ekf_ = lio_ekf::LIOEKF(lio_para_);
   lio_ekf_.init();
 
@@ -175,8 +178,12 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
   // Intializee subscribers
   pointcloud_sub_ = nh_.subscribe<sensor_msgs::PointCloud2>(
       lid_topic, 1000, &OdometryServer::lidar_cbk, this);
+
   imu_sub_ = nh_.subscribe<sensor_msgs::Imu>(imu_topic, 10000,
                                              &OdometryServer::imu_cbk, this);
+
+  gnss_sub_ = nh_.subscribe<sensor_msgs::NavSatFix>(
+      gnss_topic, 1000, &OdometryServer::gnss_cbk, this);
 
   // Intialize publishers
   odom_publisher_ = nh_.advertise<nav_msgs::Odometry>("odometry", queue_size_);
@@ -198,63 +205,61 @@ OdometryServer::OdometryServer(const ros::NodeHandle &nh,
 
   ros::Rate rate(1000);
   bool status = ros::ok();
-  while (status) {
+  int ind=0;
+  
+while (status) {
+  ros::spinOnce();
 
-    ros::spinOnce();
-    if (!data_synced_) {
-      if (!imu_buffer_.empty() && !lidar_buffer_.empty()) {
-        if (!imu_buffer_.empty()) {
+      if (!data_synced_) {
+          // Initial synchronization between IMU and LiDAR
+          if (!imu_buffer_.empty() && !lidar_buffer_.empty()) {
+              if (!imu_buffer_.empty()) {
+                  lio_ekf_.addImuData(imu_buffer_, false);
+              }
+              if (!lidar_buffer_.empty()) {
+                  if (lio_ekf_.getLiDARtimestamp() < lio_ekf_.getImutimestamp()) {
+                      lio_ekf_.addLidarData(lidar_buffer_, lidar_time_buffer_,
+                                            lidar_header_buffer_,
+                                            points_per_scan_time_buffer_);
+                  }
+              }
 
-          lio_ekf_.addImuData(imu_buffer_, false);
-        }
-        if (!lidar_buffer_.empty()) {
-
-          if (lio_ekf_.getLiDARtimestamp() < lio_ekf_.getImutimestamp()) {
-
-            lio_ekf_.addLidarData(lidar_buffer_, lidar_time_buffer_,
-                                  lidar_header_buffer_,
-                                  points_per_scan_time_buffer_);
+              if (lio_ekf_.getLiDARtimestamp() >= lio_ekf_.getImutimestamp()) {
+                  data_synced_ = true;
+              }
           }
-        }
+      } else {
+          // Process LiDAR data if it's available
+          if (!lidar_buffer_.empty() && lio_ekf_.getLiDARtimestamp() < lio_ekf_.getImutimestamp()) {
+              lio_ekf_.addLidarData(lidar_buffer_, lidar_time_buffer_,
+                                    lidar_header_buffer_, points_per_scan_time_buffer_);
+          }
+          // Process IMU data if LiDAR is also available
+          else if (!imu_buffer_.empty() && !lidar_buffer_.empty()) {
+              lio_ekf_.addImuData(imu_buffer_, false);
+              lio_ekf_.newImuProcess();
 
-        if (lio_ekf_.getLiDARtimestamp() >= lio_ekf_.getImutimestamp()) {
-          data_synced_ = true;
-        }
-      }
-    } else {
-
-      if (lidar_buffer_.empty())
-        if (imu_buffer_.empty()) {
-          continue;
-        }
-
-      if (lio_ekf_.getLiDARtimestamp() < lio_ekf_.getImutimestamp() &&
-          !lidar_buffer_.empty()) {
-
-        lio_ekf_.addLidarData(lidar_buffer_, lidar_time_buffer_,
-                              lidar_header_buffer_,
-                              points_per_scan_time_buffer_);
-      }
-
-      if (!imu_buffer_.empty() &&
-          !lidar_buffer_.empty()) // make sure lidar data is already there!
-      {
-        lio_ekf_.addImuData(imu_buffer_, false);
-        lio_ekf_.newImuProcess();
-        if (lio_ekf_.lidar_updated_) {
-          writeResults(odomRes_);
-          publishMsgs();
-          lio_ekf_.lidar_updated_ = false;
-        }
-      }
+              if (lio_ekf_.lidar_updated_) {
+                  writeResults(odomRes_);
+                  publishMsgs();
+                  lio_ekf_.lidar_updated_ = false;
+              }
+          }
+          // Process GNSS data if it's available and synchronized
+          else if (!gnss_buffer_.empty() && lio_ekf_.getGnsstimestamp() < lio_ekf_.getImutimestamp()) {
+              lio_ekf_.addGnssData(gnss_buffer_);
+              ind =ind +1;
+              std::cout<<"Val of i is"<<ind<<std::endl;
+              }
+     
+  }
+   status = ros::ok();
+      rate.sleep();
+}
     }
 
-    status = ros::ok();
-    rate.sleep();
-  }
-}
-
 void OdometryServer::imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
+
 
   sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in));
   double timestamp = msg->header.stamp.toSec();
@@ -324,6 +329,37 @@ void OdometryServer::lidar_cbk(const sensor_msgs::PointCloud2ConstPtr &msg) {
   sig_buffer_.notify_all();
 }
 
+void OdometryServer::gnss_cbk(const sensor_msgs::NavSatFix::ConstPtr &msg_in) {
+    sensor_msgs::NavSatFix::Ptr msg(new sensor_msgs::NavSatFix(*msg_in));
+    double timestamp = msg->header.stamp.toSec();
+
+    mtx_buffer_.lock();
+
+    lio_ekf::GNSS gnss_meas;
+    gnss_meas.timestamp = timestamp;
+
+    // Convert latitude and longitude to radians and altitude remains in meters
+    gnss_meas.blh << msg->latitude * M_PI / 180.0,  // Convert to radians
+                     msg->longitude * M_PI / 180.0, // Convert to radians
+                     msg->altitude;                 // Altitude in meters
+
+    // Populate the covariance matrix
+    gnss_meas.covariance << msg->position_covariance[0], msg->position_covariance[1], msg->position_covariance[2],
+                            msg->position_covariance[3], msg->position_covariance[4], msg->position_covariance[5],
+                            msg->position_covariance[6], msg->position_covariance[7], msg->position_covariance[8];
+
+    // Set validity based on GNSS status
+    gnss_meas.isvalid = (msg->status.status >= sensor_msgs::NavSatStatus::STATUS_FIX);
+
+    // Add GNSS data to buffer or update directly
+    gnss_buffer_.push_back(gnss_meas);
+
+    last_timestamp_gnss_ = timestamp;
+
+    mtx_buffer_.unlock();
+    sig_buffer_.notify_all();
+}
+
 // void OdometryServer::writeResults(std::ofstream &odo) {
 //   lio_ekf::NavState navstate = lio_ekf_.getNavState();
 
@@ -364,24 +400,27 @@ void OdometryServer::writeResults(std::ofstream &odo) {
   // Eigen::Vector3d pos = rotmat_imu * navstate.pos;
   Eigen::Vector3d pos = navstate.pos;
 
-  int street = 6;
+  int street = 5;
+  if(street == 3) {
+
+    Eigen::Vector3d position(-2853189.74594, 4667528.98078, 3268382.90545);
+    Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+    pos = Earth::local2global(origin_blh, pos);
+    pos = Earth::blh2ecef(pos);
+  }
+  if(street == 5) {
+    
+    Eigen::Vector3d position(-2853304.25225, 4667242.81293, 3268689.58877);
+    Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+
+    pos = Earth::local2global(origin_blh, pos);
+    pos = Earth::blh2ecef(pos);
+  }
   if(street == 6) {
     
     Eigen::Vector3d position(-2853536.61866, 4667028.09832, 3268793.96);
     Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
-    // Eigen::Quaterniond q_enu(0.185052, -0.004201, -0.006062, -0.982701);
-  
-    // Eigen::Matrix3d R_enu = q_enu.toRotationMatrix();
 
-    // Eigen::Matrix3d R_enu_to_ned;
-    // R_enu_to_ned << 0, 1, 0,
-    //                 1, 0, 0,
-    //                 0, 0, -1;
-
-    // Eigen::Matrix3d R_ned = R_enu_to_ned * R_enu;
-    // Eigen::Quaterniond q_ned(R_ned);
-    // Eigen::Matrix3d Rnw = q_ned.toRotationMatrix();
-    // pos = R_enu * pos;
     pos = Earth::local2global(origin_blh, pos);
     pos = Earth::blh2ecef(pos);
   }
