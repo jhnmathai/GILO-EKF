@@ -245,6 +245,67 @@ void LIOEKF::newImuProcess() {
   }
   }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    double updatetimeGnss = gnss_t_;
+
+    int GnssUpdateFlag = 0;
+    bool gnss_updated_ = false;
+
+    GnssUpdateFlag = isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetimeGnss);
+  
+    // std::cout<<"updatetimeGnss "<<std::fixed << std::setprecision(10)<<updatetimeGnss<<"\n"<<std::endl;
+
+    switch (GnssUpdateFlag) {
+    // case 0: {
+    //   // only propagate navigation state
+    //   // std::cout<<"GNSS Case 0"<<"\n"<<std::endl;
+    //   statePropagation(imupre_, imucur_);
+    //   break;
+    // }
+    case 1: {
+      // std::cout<<"GNSS Case 1"<<"\n"<<std::endl;
+      gnssUpdate(gnsscur_);
+      gnss_updated_ = true;
+      stateFeedback();
+
+      bodystate_pre_ = bodystate_cur_;
+      statePropagation(imupre_, imucur_);
+      break;
+    }
+    case 2: {
+      enter_if_flag = true;
+      // std::cout<<"GNSS Case 2"<<"\n"<<std::endl;
+      // lidardata is near current imudata, we should firstly propagate navigation
+      // state
+      statePropagation(imupre_, imucur_);
+      gnssUpdate(gnsscur_);
+      stateFeedback();
+      
+      gnss_updated_ = true;
+
+      break;
+    }
+    case 3: {
+      enter_if_flag = true;
+      // std::cout<<"GNSSCase 3"<<"\n"<<std::endl;
+      // lidardata is between the two imudata, we interpolate current imudata to
+      // lidar time
+      IMU midimu;
+      imuInterpolate(imupre_, imucur_, updatetimeGnss, midimu);
+
+      // propagate navigation state for the first half imudata
+      statePropagation(imupre_, midimu);
+      gnssUpdate(gnsscur_);
+      stateFeedback();
+
+      gnss_updated_ = true;
+      // propagate navigation state for the second half imudata
+      bodystate_pre_ = bodystate_cur_;
+      statePropagation(midimu, imucur_);
+      break;
+    }
+    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // check diagonal elements of current covariance matrix
   checkStateCov();
 
