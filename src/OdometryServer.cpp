@@ -400,7 +400,7 @@ void OdometryServer::writeResults(std::ofstream &odo) {
   // Eigen::Vector3d pos = rotmat_imu * navstate.pos;
   Eigen::Vector3d pos = navstate.pos;
 
-  int street = 6;
+  int street = 5;
   if(street == 3) {
 
     Eigen::Vector3d position(-2853189.74594, 4667528.98078, 3268382.90545);
@@ -419,6 +419,7 @@ void OdometryServer::writeResults(std::ofstream &odo) {
     
     Eigen::Vector3d position(-2853304.25225, 4667242.81293, 3268689.58877);
     Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+    // Eigen::Vector3d origin_blh(0.541564, 2.11952, 23.899);
     pos = Earth::local2global(origin_blh, pos);
     pos = Earth::blh2ecef(pos);
   }
@@ -426,13 +427,18 @@ void OdometryServer::writeResults(std::ofstream &odo) {
     
     Eigen::Vector3d position(-2853536.61866, 4667028.09832, 3268793.96);
     Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+    // Eigen::Vector3d origin_blh(0.541583, 2.11957, 20.378);
+    pos = Earth::local2global(origin_blh, pos);
+    pos = Earth::blh2ecef(pos);
+  }       
+
+  if(street == 9) {
+    
+    Eigen::Vector3d position(-2853718.71776, 4667108.03836, 3268521.38149);
+    Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
     pos = Earth::local2global(origin_blh, pos);
     pos = Earth::blh2ecef(pos);
   }
-
-  
-
-
   // transform pose from the used imu frame (front-right-down) to the original
   // imu frame
   Eigen::Matrix3d rotmat = lio_para_.imu_tran_R.inverse() *

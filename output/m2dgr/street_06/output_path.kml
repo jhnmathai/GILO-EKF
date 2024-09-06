@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Style id="lineStyle"><LineStyle><color>ff0000ff</color><width>4</width></LineStyle></Style><Placemark><name>Trajectory Path</name><styleUrl>#lineStyle</styleUrl><LineString><tessellate>1</tessellate><coordinates /></LineString></Placemark></Document></kml>

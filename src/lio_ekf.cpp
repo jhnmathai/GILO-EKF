@@ -62,6 +62,7 @@ void LIOEKF::init() {
   State_Noise_Cov_.setZero();
   delta_x_.setZero();
 
+  Cov_imugnss.setZero();
   // initialize noise matrix
   auto imunoise = liopara_.imunoise;
 
@@ -91,10 +92,20 @@ void LIOEKF::init() {
       enu_orientation = Eigen::Quaterniond(0.011578, 0.002356, 0.021849, 0.999691);
   }
   if (street == 5) {
-      enu_orientation = Eigen::Quaterniond(0.996022, 0.008558, -0.000113, 0.088699);
+      enu_orientation = Eigen::Quaterniond(0.996026, 0.008613, -0.000174, 0.088645);
+      // double theta = 0.12;
+      // Eigen::Quaterniond q_z(std::cos(theta / 2), 0, 0, std::sin(theta / 2));
+      // enu_orientation = q_z * enu_orientation;
   }
+
   if (street == 6) {
       enu_orientation = Eigen::Quaterniond(0.185052, -0.004201, -0.006062, -0.982701);
+       double theta = 0.01;
+      Eigen::Quaterniond q_z(std::cos(theta / 2), 0, 0, std::sin(theta / 2));
+      enu_orientation = q_z * enu_orientation;
+  }
+  if (street == 9) {
+      enu_orientation = Eigen::Quaterniond(0.311917, 0.011202, 0.00981, 0.949993);
   }
 
   Eigen::Quaterniond rotation_90_z(Eigen::AngleAxisd(-M_PI / 2, Eigen::Vector3d::UnitZ()));
@@ -132,6 +143,16 @@ void LIOEKF::navStateInitialization(const NavState &initstate,
   Cov_.block(GYRO_BIAS_ID, GYRO_BIAS_ID, 3, 3) =
       create_covariance_block(imuerror_std.gyrbias);
   Cov_.block(ACC_BIAS_ID, ACC_BIAS_ID, 3, 3) =
+      create_covariance_block(imuerror_std.accbias);
+
+
+  Cov_imugnss.block(POS_ID, POS_ID, 3, 3) = create_covariance_block(initstate_std.pos);
+  Cov_imugnss.block(VEL_ID, VEL_ID, 3, 3) = create_covariance_block(initstate_std.vel);
+  Cov_imugnss.block(ATT_ID, ATT_ID, 3, 3) =
+      create_covariance_block(initstate_std.euler);
+  Cov_imugnss.block(GYRO_BIAS_ID, GYRO_BIAS_ID, 3, 3) =
+      create_covariance_block(imuerror_std.gyrbias);
+  Cov_imugnss.block(ACC_BIAS_ID, ACC_BIAS_ID, 3, 3) =
       create_covariance_block(imuerror_std.accbias);
 }
 
@@ -178,135 +199,110 @@ void LIOEKF::newImuProcess() {
 
   // std::cout<<"The covariance matrix is "<<Cov_<<"\n";
   // set update time as the lidar time stamp
-  double updatetime = lidar_t_;
 
-  int lidarUpdateFlag = 0;
+// Initialize the flag to check if the first GNSS position has been received
 
-  if (lidar_t_ > last_update_t_ + 0.001 || is_first_lidar_)
-    lidarUpdateFlag =
-        isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetime);
-  // determine if we should do  update
 
-  switch (lidarUpdateFlag) {
-  case 0: {
-    // only propagate navigation state
-    statePropagation(imupre_, imucur_);
-    break;
-  }
-  case 1: {
-    // lidardata is near to the previous imudata, we should firstly do lidar
-    // update
-    if (is_first_lidar_) {
-      initFirstLiDAR(lidarUpdateFlag);
-    } else {
-      lidarUpdate();
-    }
+// GNSS update section
+double updatetimeGnss = gnss_t_;
+int GnssUpdateFlag = 0;
+bool gnss_updated_ = false;
 
-    lidar_updated_ = true;
+GnssUpdateFlag = isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetimeGnss);
 
-    bodystate_pre_ = bodystate_cur_;
-    statePropagation(imupre_, imucur_);
-    break;
-  }
-  case 2: {
-    // lidardata is near current imudata, we should firstly propagate navigation
-    // state
-    statePropagation(imupre_, imucur_);
-    if (is_first_lidar_) {
-      initFirstLiDAR(lidarUpdateFlag);
-    } else {
-      lidarUpdate();
-    }
-
-    lidar_updated_ = true;
-
-    break;
-  }
-  case 3: {
-    // lidardata is between the two imudata, we interpolate current imudata to
-    // lidar time
-    IMU midimu;
-    imuInterpolate(imupre_, imucur_, updatetime, midimu);
-
-    // propagate navigation state for the first half imudata
-    statePropagation(imupre_, midimu);
-
-    // do lidar position update at the whole second and feedback system states
-    if (is_first_lidar_) {
-      initFirstLiDAR(lidarUpdateFlag);
-    } else {
-      lidarUpdate();
-    }
-
-    lidar_updated_ = true;
-    // propagate navigation state for the second half imudata
-    bodystate_pre_ = bodystate_cur_;
-    statePropagation(midimu, imucur_);
-    break;
-  }
-  }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    double updatetimeGnss = gnss_t_;
-
-    int GnssUpdateFlag = 0;
-    bool gnss_updated_ = false;
-
-    GnssUpdateFlag = isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetimeGnss);
-  
-    // std::cout<<"updatetimeGnss "<<std::fixed << std::setprecision(10)<<updatetimeGnss<<"\n"<<std::endl;
+if (GnssUpdateFlag > 0) {
+    is_first_position_received = true; // Set the flag as GNSS is received
 
     switch (GnssUpdateFlag) {
-    // case 0: {
-    //   // only propagate navigation state
-    //   // std::cout<<"GNSS Case 0"<<"\n"<<std::endl;
-    //   statePropagation(imupre_, imucur_);
-    //   break;
-    // }
     case 1: {
-      // std::cout<<"GNSS Case 1"<<"\n"<<std::endl;
-      gnssUpdate(gnsscur_);
-      gnss_updated_ = true;
-      stateFeedback();
+        gnssUpdate(gnsscur_);
+        gnss_updated_ = true;
+        stateFeedback();
 
-      bodystate_pre_ = bodystate_cur_;
-      statePropagation(imupre_, imucur_);
-      break;
+        bodystate_pre_ = bodystate_cur_;
+        statePropagation(imupre_, imucur_);
+        break;
     }
     case 2: {
-      enter_if_flag = true;
-      // std::cout<<"GNSS Case 2"<<"\n"<<std::endl;
-      // lidardata is near current imudata, we should firstly propagate navigation
-      // state
-      statePropagation(imupre_, imucur_);
-      gnssUpdate(gnsscur_);
-      stateFeedback();
-      
-      gnss_updated_ = true;
-
-      break;
+        enter_if_flag = true;
+        statePropagation(imupre_, imucur_);
+        gnssUpdate(gnsscur_);
+        stateFeedback();
+        
+        gnss_updated_ = true;
+        break;
     }
     case 3: {
-      enter_if_flag = true;
-      // std::cout<<"GNSSCase 3"<<"\n"<<std::endl;
-      // lidardata is between the two imudata, we interpolate current imudata to
-      // lidar time
-      IMU midimu;
-      imuInterpolate(imupre_, imucur_, updatetimeGnss, midimu);
+        enter_if_flag = true;
+        IMU midimu;
+        imuInterpolate(imupre_, imucur_, updatetimeGnss, midimu);
 
-      // propagate navigation state for the first half imudata
-      statePropagation(imupre_, midimu);
-      gnssUpdate(gnsscur_);
-      stateFeedback();
+        statePropagation(imupre_, midimu);
+        gnssUpdate(gnsscur_);
+        stateFeedback();
 
-      gnss_updated_ = true;
-      // propagate navigation state for the second half imudata
-      bodystate_pre_ = bodystate_cur_;
-      statePropagation(midimu, imucur_);
-      break;
+        gnss_updated_ = true;
+        bodystate_pre_ = bodystate_cur_;
+        statePropagation(midimu, imucur_);
+        break;
     }
     }
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+    double updatetime = lidar_t_;
+    int lidarUpdateFlag = 0;
+
+    if (lidar_t_ > last_update_t_ + 0.001 || is_first_lidar_)
+        lidarUpdateFlag = isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetime);
+
+    switch (lidarUpdateFlag) {
+    case 0: {
+        statePropagation(imupre_, imucur_);
+        break;
+    }
+    case 1: {
+        if (is_first_lidar_) {
+            initFirstLiDAR(lidarUpdateFlag);
+        } else {
+            lidarUpdate();
+        }
+
+        lidar_updated_ = true;
+        bodystate_pre_ = bodystate_cur_;
+        statePropagation(imupre_, imucur_);
+        break;
+    }
+    case 2: {
+        statePropagation(imupre_, imucur_);
+        if (is_first_lidar_) {
+            initFirstLiDAR(lidarUpdateFlag);
+        } else {
+            lidarUpdate();
+        }
+
+        lidar_updated_ = true;
+        break;
+    }
+    case 3: {
+        IMU midimu;
+        imuInterpolate(imupre_, imucur_, updatetime, midimu);
+
+        statePropagation(imupre_, midimu);
+        if (is_first_lidar_) {
+            initFirstLiDAR(lidarUpdateFlag);
+        } else {
+            lidarUpdate();
+        }
+
+        lidar_updated_ = true;
+        bodystate_pre_ = bodystate_cur_;
+        statePropagation(midimu, imucur_);
+        break;
+    }
+    }
+
+
   // check diagonal elements of current covariance matrix
   checkStateCov();
 
@@ -314,6 +310,157 @@ void LIOEKF::newImuProcess() {
   bodystate_pre_ = bodystate_cur_;
   imupre_ = imucur_;
 }
+
+// void LIOEKF::newImuProcess() {
+
+//   if (is_first_imu_) {
+//     bodystate_pre_ = bodystate_cur_;
+//     imupre_ = imucur_;
+//     imu_t_ = imucur_.timestamp;
+//     is_first_imu_ = false;
+//     return;
+//   }
+
+//   // std::cout<<"The covariance matrix is "<<Cov_<<"\n";
+//   // set update time as the lidar time stamp
+//  // Update times
+// std::cout << "Starting sensor fusion process...\n";
+
+// // Check the initial conditions
+// // std::cout << "Lidar Time: " << lidar_t_ << ", Last Update Time: " << last_update_t_ << "\n";
+// // std::cout << "GNSS Time: " << gnss_t_ << "\n";
+
+// // Update times
+// double updatetime = lidar_t_;
+// double updatetimeGnss = gnss_t_;
+
+// int gnssUpdateFlag = 0;
+// int lidarUpdateFlag = 0;
+
+// bool gnss_updated_ = false;
+// bool lidar_updated_ = false;
+
+// // Determine GNSS update flag
+// gnssUpdateFlag = isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetimeGnss);
+
+// // Output the GNSS update flag for debugging
+// // std::cout << "GNSS Update Flag: " << gnssUpdateFlag << "\n";
+
+// // If GNSS is received and has priority, handle GNSS first
+// if (gnssUpdateFlag > 0) {
+//     std::cout << "Processing GNSS update...\n";
+//     switch (gnssUpdateFlag) {
+//         case 1: {
+//             enter_if_flag = true;
+//             gnssUpdate(gnsscur_);
+//             gnss_updated_ = true;
+//             stateFeedback();
+//             bodystate_pre_ = bodystate_cur_;
+//             statePropagation(imupre_, imucur_);
+//             std::cout << "GNSS Case 1 executed\n";
+//             break;
+//         }
+//         case 2: {
+//             enter_if_flag = true;
+//             statePropagation(imupre_, imucur_);
+//             gnssUpdate(gnsscur_);
+//             stateFeedback();
+//             gnss_updated_ = true;
+//             std::cout << "GNSS Case 2 executed\n";
+//             break;
+//         }
+//         case 3: {
+//             enter_if_flag = true;
+//             IMU midimu;
+//             imuInterpolate(imupre_, imucur_, updatetimeGnss, midimu);
+//             statePropagation(imupre_, midimu);
+//             gnssUpdate(gnsscur_);
+//             stateFeedback();
+//             gnss_updated_ = true;
+//             bodystate_pre_ = bodystate_cur_;
+//             statePropagation(midimu, imucur_);
+//             std::cout << "GNSS Case 3 executed\n";
+//             break;
+//         }
+//         default:
+//             std::cerr << "Unknown GNSS update flag: " << gnssUpdateFlag << "\n";
+//             break;
+//     }
+// } else {
+//     // std::cout << "GNSS update not needed, checking LiDAR...\n";
+
+//     // Determine LiDAR update flag only if GNSS update is not needed
+//     if (lidar_t_ > last_update_t_ + 0.001 || is_first_lidar_) {
+//         lidarUpdateFlag = isToUpdate(imupre_.timestamp, imucur_.timestamp, updatetime);
+//     }
+
+//     // Output the LiDAR update flag for debugging
+//     // std::cout << "LiDAR Update Flag: " << lidarUpdateFlag << "\n";
+
+//     if (enter_if_flag) {
+//         // std::cout << "Processing LiDAR update...\n";
+//         switch (lidarUpdateFlag) {
+//             case 0: {
+//                 statePropagation(imupre_, imucur_);
+//                 // std::cout << "LiDAR Case 0 executed\n";
+//                 break;
+//             }
+//             case 1: {
+//                 if (is_first_lidar_) {
+//                     initFirstLiDAR(lidarUpdateFlag);
+//                 } else {
+//                     lidarUpdate();
+//                 }
+//                 lidar_updated_ = true;
+//                 bodystate_pre_ = bodystate_cur_;
+//                 statePropagation(imupre_, imucur_);
+//                 // std::cout << "LiDAR Case 1 executed\n";
+//                 break;
+//             }
+//             case 2: {
+//                 statePropagation(imupre_, imucur_);
+//                 if (is_first_lidar_) {
+//                     initFirstLiDAR(lidarUpdateFlag);
+//                 } else {
+//                     lidarUpdate();
+//                 }
+//                 lidar_updated_ = true;
+//                 // std::cout << "LiDAR Case 2 executed\n";
+//                 break;
+//             }
+//             case 3: {
+//                 IMU midimu;
+//                 imuInterpolate(imupre_, imucur_, updatetime, midimu);
+//                 statePropagation(imupre_, midimu);
+//                 if (is_first_lidar_) {
+//                     initFirstLiDAR(lidarUpdateFlag);
+//                 } else {
+//                     lidarUpdate();
+//                 }
+//                 lidar_updated_ = true;
+//                 bodystate_pre_ = bodystate_cur_;
+//                 statePropagation(midimu, imucur_);
+//                 // std::cout << "LiDAR Case 3 executed\n";
+//                 break;
+//             }
+            
+//         }
+//     } else {
+//         // std::cout << "No update needed\n";
+//     }
+// }
+
+// // std::cout << "fusion completed.\n";
+
+
+// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//   // check diagonal elements of current covariance matrix
+//   checkStateCov();
+
+//   // update system state and imudata at the previous epoch
+//   bodystate_pre_ = bodystate_cur_;
+//   imupre_ = imucur_;
+// }
 
 void LIOEKF::statePropagation(IMU &imupre, IMU &imucur) {
 
@@ -533,6 +680,11 @@ void LIOEKF::ekfPredict(Eigen::Matrix15d &State_Transition_Mat,
     return State_Transition_Mat * Sigma * State_Transition_Mat.transpose() +
            Process_Noise_Cov;
   };
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  Cov_imugnss = State_Transition_Mat * Cov_imugnss * State_Transition_Mat.transpose() +
+         Cov_;
+  //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // propagate system covariance and error state
   Cov_ = State_Transition_Mat * Cov_ * State_Transition_Mat.transpose() +
          Process_Noise_Cov;
@@ -543,17 +695,38 @@ void LIOEKF::ekfPredict(Eigen::Matrix15d &State_Transition_Mat,
   delta_x_ = State_Transition_Mat * delta_x_;
 }
 
+// void LIOEKF::ekfUpdate(Eigen::MatrixXd &dz, Eigen::MatrixXd &H,
+//                        Eigen::MatrixXd &R) {
+//   // debug_<<"ekfUpdate start"<<std::endl;
+//   assert(H.cols() == Cov_imugnss.rows());
+//   assert(dz.rows() == H.rows());
+//   assert(dz.rows() == R.rows());
+//   assert(dz.cols() == 1);
+
+//   // Compute Kalman Gain
+//   auto temp = H * Cov_ * H.transpose() + R;
+//   Eigen::MatrixXd K = Cov_ * H.transpose() * temp.inverse();
+
+//   // update system error state and covariance
+//   Eigen::Matrix15d I;
+//   I.setIdentity();
+//   I = I - K * H;
+
+//   delta_x_ = delta_x_ + K * (dz - H * delta_x_);
+//   Cov_ = I * Cov_ * I.transpose() + K * R * K.transpose();
+// }
+
 void LIOEKF::ekfUpdate(Eigen::MatrixXd &dz, Eigen::MatrixXd &H,
                        Eigen::MatrixXd &R) {
   // debug_<<"ekfUpdate start"<<std::endl;
-  assert(H.cols() == Cov_.rows());
+  assert(H.cols() == Cov_imugnss.rows());
   assert(dz.rows() == H.rows());
   assert(dz.rows() == R.rows());
   assert(dz.cols() == 1);
 
   // Compute Kalman Gain
-  auto temp = H * Cov_ * H.transpose() + R;
-  Eigen::MatrixXd K = Cov_ * H.transpose() * temp.inverse();
+  auto temp = H * Cov_imugnss * H.transpose() + R;
+  Eigen::MatrixXd K = Cov_imugnss * H.transpose() * temp.inverse();
 
   // update system error state and covariance
   Eigen::Matrix15d I;
@@ -561,9 +734,8 @@ void LIOEKF::ekfUpdate(Eigen::MatrixXd &dz, Eigen::MatrixXd &H,
   I = I - K * H;
 
   delta_x_ = delta_x_ + K * (dz - H * delta_x_);
-  Cov_ = I * Cov_ * I.transpose() + K * R * K.transpose();
+  Cov_imugnss = I * Cov_imugnss * I.transpose() + K * R * K.transpose();
 }
-
 void LIOEKF::stateFeedback() {
   // position error feedback
   Eigen::Vector3d delta_translation = delta_x_.block(POS_ID, 0, 3, 1);
@@ -636,8 +808,9 @@ void LIOEKF::gnssUpdate(const GNSS &gnss_meas) {
       }
 
       if(street == 5) {
-        Eigen::Vector3d position(-2853304.25225, 4667242.81293, 3268689.58877);
-        Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+          Eigen::Vector3d position(-2853304.25225, 4667242.81293, 3268689.58877);
+          Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+        // Eigen::Vector3d origin_blh(0.541564, 2.11952, 23.899);
         gnss_pos_local = Earth::global2local(origin_blh, gnss_meas.blh);
       }
 
@@ -645,13 +818,22 @@ void LIOEKF::gnssUpdate(const GNSS &gnss_meas) {
         
         Eigen::Vector3d position(-2853536.61866, 4667028.09832, 3268793.96);
         Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+        // Eigen::Vector3d origin_blh(0.541583, 2.11957, 20.378);
+        gnss_pos_local = Earth::global2local(origin_blh, gnss_meas.blh);
+      }
+
+      if(street == 9) {
+        
+        Eigen::Vector3d position(-2853718.71776, 4667108.03836, 3268521.38149);
+        Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
         gnss_pos_local = Earth::global2local(origin_blh, gnss_meas.blh);
       }
 
       // Eigen::Vector3d gnss_pos_local = Earth::blhToEnu(gnss_init_val, gnss_meas.blh);
       // Eigen::Vector3d gnss_pos_local = Earth::blh2ecef(gnss_meas.blh);
       Eigen::Vector3d predicted_position = bodystate_cur_.pose.translation();
-      Eigen::MatrixXd dz = (gnss_pos_local - predicted_position).cast<double>();  
+      gnss_pos_local = gnss_pos_local - Eigen::Vector3d( -0.09825, 0.00582, 0.72673);
+      Eigen::MatrixXd dz = (predicted_position - gnss_pos_local).cast<double>();  
       Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 15);  
       H.block<3, 3>(0, POS_ID) = Eigen::Matrix3d::Identity();  
       Eigen::MatrixXd R = gnss_meas.covariance.cast<double>();
@@ -667,5 +849,57 @@ void LIOEKF::gnssUpdate(const GNSS &gnss_meas) {
 
       ekfUpdate(dz, H, R);
   }
+
+//   void LIOEKF::gnssUpdate(const GNSS &gnss_meas) {
+
+// ;
+//       Eigen::Vector3d origin_blh;
+//       if(street == 3) {
+//         Eigen::Vector3d position(-2853189.74594, 4667528.98078, 3268382.90545);
+//         Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+//         // gnss_pos_local = Earth::global2local(origin_blh, gnss_meas.blh);
+//       }
+
+//       if(street == 4) {
+//         Eigen::Vector3d position(-2853421.14557, 4667372.61299, 3268404.01841);
+//         Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+
+//       }
+
+//       if(street == 5) {
+//         Eigen::Vector3d position(-2853304.24103, 4667242.82167, 3268689.5724);
+//         origin_blh = Earth::ecef2blh(position);
+
+//       }
+
+//       if(street == 6) {
+        
+//         Eigen::Vector3d position(-2853536.61866, 4667028.09832, 3268793.96);
+//         Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+
+//       }
+
+//       if(street == 9) {
+        
+//         Eigen::Vector3d position(-2853718.71776, 4667108.03836, 3268521.38149);
+//         Eigen::Vector3d origin_blh = Earth::ecef2blh(position);
+
+//       }
+
+
+//       Eigen::Vector3d predicted_position = bodystate_cur_.pose.translation();
+//       Eigen::Vector3d predicted_position_global = Earth::local2global(origin_blh, predicted_position);
+
+//       Eigen::MatrixXd dz = (predicted_position_global - gnss_meas.blh).cast<double>();  
+//       Eigen::MatrixXd H = Eigen::MatrixXd::Zero(3, 15);  
+//       H.block<3, 3>(0, POS_ID) = Eigen::Matrix3d::Identity();  
+//       Eigen::MatrixXd R = gnss_meas.covariance.cast<double>();
+
+//       std::cout<<"gnss_pos "<<gnss_meas.blh<<"\n"<<std::endl;
+//       std::cout<<"predicted_position "<<predicted_position_global<<"\n"<<std::endl;
+//       std::cout<<"dz "<<dz<<"\n"<<std::endl;
+
+//       ekfUpdate(dz, H, R);
+//   }
 
 } // namespace lio_ekf

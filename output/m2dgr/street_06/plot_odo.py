@@ -29,24 +29,40 @@ def read_data(file_name):
     
     return timestamps, ecef_data
 
-# Create KML file
-def create_kml(timestamps, lat_lon_alt):
+# Create KML file with a path
+def create_kml_with_path(timestamps, lat_lon_alt):
     kml = ET.Element('kml')
     kml.set('xmlns', 'http://www.opengis.net/kml/2.2')
     document = ET.SubElement(kml, 'Document')
     
-    for i, (timestamp, (lat, lon, alt)) in enumerate(zip(timestamps, lat_lon_alt)):
-        placemark = ET.SubElement(document, 'Placemark')
-        name = ET.SubElement(placemark, 'name')
-        name.text = str(i)
-        description = ET.SubElement(placemark, 'description')
-        description.text = f'Timestamp: {timestamp}'
-        point = ET.SubElement(placemark, 'Point')
-        coordinates = ET.SubElement(point, 'coordinates')
-        coordinates.text = f'{lon},{lat},{alt}'
+    # Define a style for the line
+    style = ET.SubElement(document, 'Style', id='lineStyle')
+    linestyle = ET.SubElement(style, 'LineStyle')
+    color = ET.SubElement(linestyle, 'color')
+    color.text = 'ff0000ff'  # Blue color (in AABBGGRR format)
+    width = ET.SubElement(linestyle, 'width')
+    width.text = '4'  # Width of the line
+    
+    # Create a Placemark for the path
+    placemark = ET.SubElement(document, 'Placemark')
+    name = ET.SubElement(placemark, 'name')
+    name.text = 'Trajectory Path'
+    styleUrl = ET.SubElement(placemark, 'styleUrl')
+    styleUrl.text = '#lineStyle'
+    lineString = ET.SubElement(placemark, 'LineString')
+    tessellate = ET.SubElement(lineString, 'tessellate')
+    tessellate.text = '1'
+    coordinates = ET.SubElement(lineString, 'coordinates')
+    
+    # Add the coordinates for the path
+    coord_string = ""
+    for (lat, lon, alt) in lat_lon_alt:
+        coord_string += f'{lon},{lat},{alt} '
+    
+    coordinates.text = coord_string.strip()
     
     tree = ET.ElementTree(kml)
-    tree.write('output.kml', xml_declaration=True, encoding='utf-8')
+    tree.write('output_path.kml', xml_declaration=True, encoding='utf-8')
 
 # Main process
 def main():
@@ -55,8 +71,8 @@ def main():
     
     lat_lon_alt = [ecef_to_llh(ecef) for ecef in ecef_data]
     
-    create_kml(timestamps, lat_lon_alt)
-    print('KML file generated as output.kml')
+    create_kml_with_path(timestamps, lat_lon_alt)
+    print('KML file generated as output_path.kml')
 
 if __name__ == "__main__":
     main()

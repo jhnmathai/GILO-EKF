@@ -203,8 +203,9 @@ private:
   void resetCov(Eigen::Matrix15d &Cov);
 
 private:
-  int street = 6;
+  int street = 5;
 
+  bool is_first_position_received = false;
    bool enter_if_flag = false;  
   bool gnns_first_flag = true;
   double gnss_init_timestamp;
@@ -214,6 +215,7 @@ private:
   GNSS gnss_start_; 
   GNSS gnsscur_;
   double gnss_t_;
+  Eigen::Matrix15d Cov_imugnss;
 
   LIOPara liopara_;
   double imu_t_, last_update_t_, lidar_t_, first_lidar_t = 0;
